@@ -5,8 +5,8 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "start": "tsx --env-file=.env src/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
@@ -27,8 +27,12 @@
     ]
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "@effect/platform": "^0.96.2",
-    "effect": "^3.21.4"
+    "better-sqlite3": "^12.11.1",
+    "effect": "^3.21.4",
+    "openai": "^6.45.0",
+    "sqlite-vec": "^0.1.9"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.2",
@@ -39,5 +43,10 @@
     "lint-staged": "^17.0.8",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   }
 }
