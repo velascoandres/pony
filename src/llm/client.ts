@@ -1,20 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { Effect, Layer } from 'effect'
-import { ConfigPort } from '../config.js'
+import { Effect, Redacted } from 'effect'
+import { ConfigService } from '../config.js'
 import { AskLLMError, NoTextContentError } from '../errors.js'
-import { LLMClientPort } from './client.port.js'
 
-export const LLMClientLive = Layer.effect(
-  LLMClientPort,
-  Effect.gen(function* () {
-    const config = yield* ConfigPort
+export class LLMService extends Effect.Service<LLMService>()('app/llm', {
+  dependencies: [ConfigService.Default],
+  effect: Effect.gen(function* () {
+    const { config } = yield* ConfigService
 
     const client = new Anthropic({
-      apiKey: config.get('ANTHROPIC_API_KEY'),
+      apiKey: Redacted.value(config.anthropicApiKey),
       baseURL: 'https://api.anthropic.com',
     })
 
-    const model = config.get('ANTHROPIC_MODEL')
+    const model = config.anthropicModel
 
     const createMessage = (params: Anthropic.MessageCreateParamsNonStreaming) =>
       Effect.tryPromise({
@@ -43,4 +42,4 @@ export const LLMClientLive = Layer.effect(
         }),
     }
   }),
-)
+}) {}

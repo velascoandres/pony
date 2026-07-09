@@ -10,6 +10,8 @@ import {
 import type { TaxPayerRegistryResult } from '../types.js'
 import { validateRuc } from '../utils/validate-ruc.js'
 
+const SRI_BASE_URL = 'https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet/rest'
+
 interface GetFiscalInfoToolInterface {
   execute(
     ruc: string,
@@ -23,7 +25,7 @@ interface GetFiscalInfoToolInterface {
   >
 }
 
-export class GetFiscalInfoTool extends Effect.Tag('LLMClientPort')<
+export class GetFiscalInfoTool extends Effect.Tag('GetFiscalInfoTool')<
   GetFiscalInfoTool,
   GetFiscalInfoToolInterface
 >() {}
@@ -33,14 +35,12 @@ export const GetFiscalInfoToolRestLive = Layer.effect(
   Effect.gen(function* () {
     const httpClient = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk)
 
-    const BASE = 'https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet/rest'
-
     return {
       execute: (ruc: string) =>
         Effect.gen(function* () {
           const validatedRuc = yield* validateRuc(ruc)
 
-          return yield* httpClient.get(`${BASE}/fiscal-info/${validatedRuc}`).pipe(
+          return yield* httpClient.get(`${SRI_BASE_URL}/fiscal-info/${validatedRuc}`).pipe(
             Effect.flatMap((response) => response.json),
             Effect.map((body) => body as TaxPayerRegistryResult),
             Effect.mapError((error) => new FetchError({ message: error.message })),
