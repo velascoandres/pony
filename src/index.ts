@@ -1,8 +1,9 @@
 import { Effect, Layer } from 'effect'
 import { ConfigService } from './config.js'
 import { LLMService } from './llm/client.js'
+import { ServicesLayer } from './services/services.layer.js'
 
-const MainLayer = Layer.mergeAll(ConfigService.Default, LLMService.Default)
+const MainLayer = Layer.mergeAll(ConfigService.Default, LLMService.Default, ServicesLayer)
 
 const program = Effect.gen(function* () {
   // Example usage of the LLMClientPort
