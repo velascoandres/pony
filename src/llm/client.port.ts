@@ -1,5 +1,5 @@
 import { Effect } from 'effect'
-import type { AskLLMError, NoTextContentError } from './errors.js'
+import type { AskLLMError, NoTextContentError } from '../errors.js'
 
 interface LLMClientInterface {
   ask(
