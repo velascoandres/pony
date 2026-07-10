@@ -25,3 +25,33 @@ export const SriWEstablishmentRaw = Schema.Struct({
   estado: Schema.optional(Schema.String),
   matriz: Schema.optional(Schema.String), // "SI" | "NO"
 })
+
+// Parsed data structures for internal use
+export const ContributorSchema = Schema.Struct({
+  ruc: Schema.String,
+  businessName: Schema.String,
+  status: Schema.String,
+  contributorType: Schema.String,
+  regime: Schema.optional(Schema.String),
+  economicActivity: Schema.optional(Schema.String),
+  accountingObligatory: Schema.optional(Schema.Boolean),
+  retentionAgent: Schema.optional(Schema.Boolean),
+  specialContributor: Schema.optional(Schema.Boolean),
+  startDateActivities: Schema.optional(Schema.String),
+})
+
+export const EstablishmentSchema = Schema.Struct({
+  number: Schema.String,
+  commercialName: Schema.optional(Schema.String),
+  address: Schema.optional(Schema.String),
+  status: Schema.optional(Schema.String),
+  mainOffice: Schema.optional(Schema.Boolean),
+})
+
+export const TaxPayerRegistryResultSchema = Schema.Struct({
+  ok: Schema.Boolean,
+  source: Schema.Union(Schema.Literal('cache'), Schema.Literal('sri')),
+  contributor: Schema.optional(ContributorSchema),
+  establishments: Schema.optional(Schema.Array(EstablishmentSchema)),
+  error: Schema.optional(Schema.String),
+})

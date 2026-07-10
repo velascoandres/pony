@@ -1,51 +1,68 @@
-import { HttpClient } from '@effect/platform'
-import { Effect, Layer } from 'effect'
+import { Effect, Schema } from 'effect'
 import {
-  FetchError,
-  type InvalidEstablishmentError,
-  type InvalidProvinceCodeError,
-  type InvalidRucFormatError,
-  type InvalidThirdDigitError,
-} from '../errors.js'
-import type { TaxPayerRegistryResult } from '../types.js'
+  type ContributorSchema,
+  type EstablishmentSchema,
+  type SriContributorRaw,
+  type SriWEstablishmentRaw,
+  TaxPayerRegistryResultSchema,
+} from './../schemas.js'
+import { SriService } from '../services/sri.service.js'
 import { validateRuc } from '../utils/validate-ruc.js'
 
-const SRI_BASE_URL = 'https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet/rest'
+type SriContributor = Schema.Schema.Type<typeof SriContributorRaw>
+type SriEstablishment = Schema.Schema.Type<typeof SriWEstablishmentRaw>
+type Contributor = Schema.Schema.Type<typeof ContributorSchema>
+type Establishment = Schema.Schema.Type<typeof EstablishmentSchema>
 
-interface GetFiscalInfoToolInterface {
-  execute(
-    ruc: string,
-  ): Effect.Effect<
-    TaxPayerRegistryResult,
-    | FetchError
-    | InvalidRucFormatError
-    | InvalidProvinceCodeError
-    | InvalidThirdDigitError
-    | InvalidEstablishmentError
-  >
-}
+const parseYesNo = (value: string | undefined): boolean | undefined =>
+  value === undefined ? undefined : value.toUpperCase() === 'SI'
 
-export class GetFiscalInfoTool extends Effect.Tag('GetFiscalInfoTool')<
-  GetFiscalInfoTool,
-  GetFiscalInfoToolInterface
->() {}
+const mapContributor = (raw: SriContributor): Contributor => ({
+  ruc: raw.numeroRuc ?? '',
+  businessName: raw.razonSocial ?? '',
+  status: raw.estadoContribuyenteRuc ?? '',
+  contributorType: raw.tipoContribuyente ?? '',
+  regime: raw.regimen,
+  economicActivity: raw.actividadEconomicaPrincipal,
+  accountingObligatory: parseYesNo(raw.obligadoLlevarContabilidad),
+  retentionAgent: parseYesNo(raw.agenteRetencion),
+  specialContributor: parseYesNo(raw.contribuyenteEspecial),
+  startDateActivities: raw.informacionFechasContribuyente?.fechaInicioActividades,
+})
 
-export const GetFiscalInfoToolRestLive = Layer.effect(
-  GetFiscalInfoTool,
-  Effect.gen(function* () {
-    const httpClient = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk)
+const mapEstablishment = (raw: SriEstablishment): Establishment => ({
+  number: raw.numeroEstablecimiento ?? '',
+  commercialName: raw.nombreFantasiaComercial,
+  address: raw.direccionCompleta,
+  status: raw.estado,
+  mainOffice: parseYesNo(raw.matriz),
+})
 
-    return {
-      execute: (ruc: string) =>
-        Effect.gen(function* () {
-          const validatedRuc = yield* validateRuc(ruc)
+export class GetFiscalInfoTool extends Effect.Service<GetFiscalInfoTool>()(
+  'app/GetFiscalInfoTool',
+  {
+    dependencies: [SriService.Default],
+    effect: Effect.gen(function* () {
+      return {
+        execute: (ruc: string) =>
+          Effect.gen(function* () {
+            const validatedRuc = yield* validateRuc(ruc)
+            const sriService = yield* SriService
 
-          return yield* httpClient.get(`${SRI_BASE_URL}/fiscal-info/${validatedRuc}`).pipe(
-            Effect.flatMap((response) => response.json),
-            Effect.map((body) => body as TaxPayerRegistryResult),
-            Effect.mapError((error) => new FetchError({ message: error.message })),
-          )
-        }),
-    }
-  }),
-)
+            const [contributor, establishment] = yield* Effect.all([
+              sriService.getContrib(validatedRuc),
+              sriService.getEstablishment(validatedRuc),
+            ])
+
+            // Parse contributor and establishment to TaxPayerRegistryResultSchema
+            return yield* Schema.decode(TaxPayerRegistryResultSchema)({
+              ok: true,
+              source: 'sri' as const,
+              contributor: mapContributor(contributor),
+              establishments: establishment ? [mapEstablishment(establishment)] : [],
+            })
+          }),
+      }
+    }),
+  },
+) {}
