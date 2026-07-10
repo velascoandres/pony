@@ -1,9 +1,14 @@
+import { FetchHttpClient } from '@effect/platform'
 import { Effect, Layer } from 'effect'
 import { ConfigService } from './config.js'
 import { LLMService } from './llm/client.js'
 import { ServicesLayer } from './services/services.layer.js'
+import { ToolsLayer } from './tools/tool.layer.js'
 
-const MainLayer = Layer.mergeAll(ConfigService.Default, LLMService.Default, ServicesLayer)
+const MainLayer = Layer.mergeAll(ConfigService.Default, LLMService.Default, ToolsLayer).pipe(
+  Layer.provide(ServicesLayer),
+  Layer.provide(FetchHttpClient.layer),
+)
 
 const program = Effect.gen(function* () {
   // Example usage of the LLMClientPort
