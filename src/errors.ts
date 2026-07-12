@@ -22,3 +22,5 @@ export class InvalidThirdDigitError extends Data.TaggedError('InvalidThirdDigitE
 export class InvalidEstablishmentError extends Data.TaggedError('InvalidEstablishmentError')<{
   message: string
 }> {}
+
+export class XMLParsingError extends Data.TaggedError('XMLParsingError')<{ message: string }> {}

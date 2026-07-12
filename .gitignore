@@ -8,3 +8,4 @@ dist/
 coverage/
 *.tsbuildinfo
 .claude/
+invoices/*.xml

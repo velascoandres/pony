@@ -55,3 +55,19 @@ export const TaxPayerRegistryResultSchema = Schema.Struct({
   establishments: Schema.optional(Schema.Array(EstablishmentSchema)),
   error: Schema.optional(Schema.String),
 })
+
+export const InvoiceSchema = Schema.Struct({
+  ruc: Schema.String,
+  businessName: Schema.String,
+  date: Schema.String,
+  items: Schema.Array(
+    Schema.Struct({
+      description: Schema.String,
+      quantity: Schema.Number,
+      unitPrice: Schema.Number,
+    }),
+  ),
+  subtotal: Schema.Number,
+  iva: Schema.Number,
+  total: Schema.Number,
+})

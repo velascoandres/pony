@@ -1,4 +1,5 @@
 import { FetchHttpClient } from '@effect/platform'
+import { NodeFileSystem } from '@effect/platform-node'
 import { Effect, Layer } from 'effect'
 import { ConfigService } from './config.js'
 import { LLMService } from './llm/client.js'
@@ -8,6 +9,7 @@ import { ToolsLayer } from './tools/tool.layer.js'
 const MainLayer = Layer.mergeAll(ConfigService.Default, LLMService.Default, ToolsLayer).pipe(
   Layer.provide(ServicesLayer),
   Layer.provide(FetchHttpClient.layer),
+  Layer.provide(NodeFileSystem.layer),
 )
 
 const program = Effect.gen(function* () {
