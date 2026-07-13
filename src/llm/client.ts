@@ -4,7 +4,6 @@ import { ConfigService } from '../config.js'
 import { AskLLMError, NoTextContentError } from '../errors.js'
 
 export class LLMService extends Effect.Service<LLMService>()('app/llm', {
-  dependencies: [ConfigService.Default],
   effect: Effect.gen(function* () {
     const { config } = yield* ConfigService
 

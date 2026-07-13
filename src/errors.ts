@@ -24,3 +24,5 @@ export class InvalidEstablishmentError extends Data.TaggedError('InvalidEstablis
 }> {}
 
 export class XMLParsingError extends Data.TaggedError('XMLParsingError')<{ message: string }> {}
+
+export class DatabaseError extends Data.TaggedError('DatabaseError')<{ message: string }> {}
