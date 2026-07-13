@@ -1,20 +1,27 @@
 import { FetchHttpClient } from '@effect/platform'
-import { NodeFileSystem } from '@effect/platform-node'
+import { NodeFileSystem, NodePath } from '@effect/platform-node'
 import { Effect, Layer } from 'effect'
 import { ConfigService } from './config.js'
+import { DbClient } from './db/client.js'
 import { LLMService } from './llm/client.js'
 import { ServicesLayer } from './services/services.layer.js'
 import { ToolsLayer } from './tools/tool.layer.js'
 
-const MainLayer = Layer.mergeAll(ConfigService.Default, LLMService.Default, ToolsLayer).pipe(
+const MainLayer = Layer.mergeAll(LLMService.Default, DbClient.Default, ToolsLayer).pipe(
   Layer.provide(ServicesLayer),
   Layer.provide(FetchHttpClient.layer),
   Layer.provide(NodeFileSystem.layer),
+  Layer.provide(NodePath.layer),
+  Layer.provide(ConfigService.Default),
 )
 
 const program = Effect.gen(function* () {
   // Example usage of the LLMClientPort
   const llmClient = yield* LLMService
+  const dbClient = yield* DbClient
+
+  // Create database tables
+  yield* dbClient.createTables()
 
   const prompt = 'What is the capital of France?'
   const systemPrompt = 'You are a helpful assistant.'
@@ -32,4 +39,4 @@ const main = runnable.pipe(
   }),
 )
 
-Effect.runPromise(main).then(console.log)
+Effect.runPromise(main)
