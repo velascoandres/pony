@@ -50,11 +50,11 @@ const findInvoice = (node: Xml, depth = 0): Xml | undefined => {
   return undefined
 }
 
-const mapInvoice = (factura: Xml): Invoice => {
-  const infoTributaria: Xml = factura.infoTributaria ?? {}
-  const infoFactura: Xml = factura.infoFactura ?? {}
+const mapInvoice = (invoiceContent: Xml): Invoice => {
+  const infoTributaria: Xml = invoiceContent.infoTributaria ?? {}
+  const infoFactura: Xml = invoiceContent.infoFactura ?? {}
 
-  const items = toArray<Xml>(factura.detalles?.detalle).map((detalle) => {
+  const items = toArray<Xml>(invoiceContent.detalles?.detalle).map((detalle) => {
     // Per-line IVA is impuesto código "2".
     const lineTaxes = toArray<Xml>(detalle.impuestos?.impuesto).filter(
       (imp) => String(imp.codigo) === '2',

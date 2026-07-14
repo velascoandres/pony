@@ -1,17 +1,19 @@
 import { FetchHttpClient } from '@effect/platform'
 import { NodeFileSystem, NodePath } from '@effect/platform-node'
 import { Effect, Layer } from 'effect'
+import { AgentsLayer } from './agent/agents.layer.js'
 import { ConfigService } from './config.js'
 import { DbClient } from './db/client.js'
 import { LLMService } from './llm/client.js'
 import { ServicesLayer } from './services/services.layer.js'
 import { ToolsLayer } from './tools/tool.layer.js'
 
-const MainLayer = Layer.mergeAll(LLMService.Default, ToolsLayer).pipe(
+const MainLayer = Layer.mergeAll(LLMService.Default, AgentsLayer).pipe(
+  Layer.provide(ToolsLayer),
   Layer.provide(ServicesLayer),
-  Layer.provide(FetchHttpClient.layer),
   Layer.provide(DbClient.Default),
   Layer.provide(ConfigService.Default),
+  Layer.provide(FetchHttpClient.layer),
   Layer.provide(NodeFileSystem.layer),
   Layer.provide(NodePath.layer),
 )

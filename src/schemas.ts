@@ -81,3 +81,13 @@ export const InvoiceSchema = Schema.Struct({
 export type Contributor = typeof ContributorSchema
 
 export type Invoice = Schema.Schema.Type<typeof InvoiceSchema>
+
+export interface ToolDefinition {
+  name: string
+  description: string
+  input_schema: {
+    type: 'object'
+    properties: Record<string, unknown>
+    required?: string[]
+  }
+}

@@ -41,8 +41,6 @@ const mapEstablishment = (raw: SriEstablishment): Establishment => ({
 export class GetFiscalInfoTool extends Effect.Service<GetFiscalInfoTool>()(
   'app/GetFiscalInfoTool',
   {
-    // SriService es transversal: se declara como requerimiento (R) y se
-    // provee una sola vez en el MainLayer, no como dependency privada.
     effect: Effect.gen(function* () {
       return {
         execute: (ruc: string) =>
