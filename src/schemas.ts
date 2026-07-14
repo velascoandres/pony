@@ -57,17 +57,27 @@ export const TaxPayerRegistryResultSchema = Schema.Struct({
 })
 
 export const InvoiceSchema = Schema.Struct({
+  accessKey: Schema.String, // claveAcceso — 49 chars, unique per invoice
   ruc: Schema.String,
   businessName: Schema.String,
+  branchCode: Schema.String, // estab: "002"
+  invoiceNumber: Schema.String, // "estab-ptoEmi-secuencial": "002-030-000123456"
   date: Schema.String,
   items: Schema.Array(
     Schema.Struct({
       description: Schema.String,
       quantity: Schema.Number,
       unitPrice: Schema.Number,
+      subtotal: Schema.Number, // precioTotalSinImpuesto
+      vatRate: Schema.Number, // 0, 12, 15
+      vatAmount: Schema.Number,
     }),
   ),
   subtotal: Schema.Number,
   iva: Schema.Number,
   total: Schema.Number,
 })
+
+export type Contributor = typeof ContributorSchema
+
+export type Invoice = Schema.Schema.Type<typeof InvoiceSchema>

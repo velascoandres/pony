@@ -54,20 +54,36 @@ const mapInvoice = (factura: Xml): Invoice => {
   const infoTributaria: Xml = factura.infoTributaria ?? {}
   const infoFactura: Xml = factura.infoFactura ?? {}
 
-  const items = toArray<Xml>(factura.detalles?.detalle).map((detalle) => ({
-    description: String(detalle.descripcion ?? ''),
-    quantity: toNumber(detalle.cantidad),
-    unitPrice: toNumber(detalle.precioUnitario),
-  }))
+  const items = toArray<Xml>(factura.detalles?.detalle).map((detalle) => {
+    // Per-line IVA is impuesto código "2".
+    const lineTaxes = toArray<Xml>(detalle.impuestos?.impuesto).filter(
+      (imp) => String(imp.codigo) === '2',
+    )
+    return {
+      description: String(detalle.descripcion ?? ''),
+      quantity: toNumber(detalle.cantidad),
+      unitPrice: toNumber(detalle.precioUnitario),
+      subtotal: toNumber(detalle.precioTotalSinImpuesto),
+      vatRate: toNumber(lineTaxes[0]?.tarifa),
+      vatAmount: lineTaxes.reduce((sum, imp) => sum + toNumber(imp.valor), 0),
+    }
+  })
 
   // IVA is impuesto código "2"; sum its valor across all tax lines.
   const iva = toArray<Xml>(infoFactura.totalConImpuestos?.totalImpuesto)
     .filter((imp) => String(imp.codigo) === '2')
     .reduce((sum, imp) => sum + toNumber(imp.valor), 0)
 
+  const estab = String(infoTributaria.estab ?? '')
+  const ptoEmi = String(infoTributaria.ptoEmi ?? '')
+  const secuencial = String(infoTributaria.secuencial ?? '')
+
   return {
+    accessKey: String(infoTributaria.claveAcceso ?? ''),
     ruc: String(infoTributaria.ruc ?? ''),
     businessName: String(infoTributaria.razonSocial ?? ''),
+    branchCode: estab,
+    invoiceNumber: `${estab}-${ptoEmi}-${secuencial}`,
     date: String(infoFactura.fechaEmision ?? ''),
     items,
     subtotal: toNumber(infoFactura.totalSinImpuestos),

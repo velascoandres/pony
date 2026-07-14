@@ -39,6 +39,28 @@ export class DbClient extends Effect.Service<DbClient>()('app/DbClient', {
           Effect.tapError((error) => Console.error(`Failed to create tables: ${error}`)),
           Effect.mapError((error) => new DatabaseError({ message: String(error) })),
         ),
+      executeSql: (sql: string, params?: Record<string, unknown>) =>
+        Effect.gen(function* () {
+          yield* Console.log(`Executing SQL: ${sql} with params: ${JSON.stringify(params)}`)
+          const stmt = dbClient.prepare(sql)
+          const result = params ? stmt.run(params) : stmt.run()
+          yield* Console.log(`SQL executed successfully, changes: ${result.changes}`)
+          return result
+        }).pipe(
+          Effect.tapError((error) => Console.error(`Failed to execute SQL: ${error}`)),
+          Effect.mapError((error) => new DatabaseError({ message: String(error) })),
+        ),
+      query: <T = unknown>(sql: string, params?: Record<string, unknown>) =>
+        Effect.gen(function* () {
+          yield* Console.log(`Querying SQL: ${sql} with params: ${JSON.stringify(params)}`)
+          const stmt = dbClient.prepare(sql)
+          const rows = (params ? stmt.all(params) : stmt.all()) as T[]
+          yield* Console.log(`SQL query returned ${rows.length} rows`)
+          return rows
+        }).pipe(
+          Effect.tapError((error) => Console.error(`Failed to query SQL: ${error}`)),
+          Effect.mapError((error) => new DatabaseError({ message: String(error) })),
+        ),
     }
   }),
 }) {}

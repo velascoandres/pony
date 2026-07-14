@@ -7,21 +7,18 @@ import { LLMService } from './llm/client.js'
 import { ServicesLayer } from './services/services.layer.js'
 import { ToolsLayer } from './tools/tool.layer.js'
 
-const MainLayer = Layer.mergeAll(LLMService.Default, DbClient.Default, ToolsLayer).pipe(
+const MainLayer = Layer.mergeAll(LLMService.Default, ToolsLayer).pipe(
   Layer.provide(ServicesLayer),
   Layer.provide(FetchHttpClient.layer),
+  Layer.provide(DbClient.Default),
+  Layer.provide(ConfigService.Default),
   Layer.provide(NodeFileSystem.layer),
   Layer.provide(NodePath.layer),
-  Layer.provide(ConfigService.Default),
 )
 
 const program = Effect.gen(function* () {
   // Example usage of the LLMClientPort
   const llmClient = yield* LLMService
-  const dbClient = yield* DbClient
-
-  // Create database tables
-  yield* dbClient.createTables()
 
   const prompt = 'What is the capital of France?'
   const systemPrompt = 'You are a helpful assistant.'
