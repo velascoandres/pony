@@ -21,6 +21,9 @@ export class LLMService extends Effect.Service<LLMService>()('app/llm', {
       })
 
     return {
+      createMessage: (params: Omit<Anthropic.MessageCreateParamsNonStreaming, 'model'>) =>
+        createMessage({ ...params, model }),
+
       ask: (prompt: string, systemPrompt?: string) =>
         Effect.gen(function* () {
           const response = yield* createMessage({
