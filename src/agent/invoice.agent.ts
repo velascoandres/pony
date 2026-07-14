@@ -62,11 +62,6 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
           // Append assistant response to conversation
           messages.push({ role: 'assistant', content: response.content })
 
-          if (response.stop_reason === 'end_turn') {
-            const textBlock = response.content.find((block) => block.type === 'text')
-            return textBlock?.type === 'text' ? textBlock.text : ''
-          }
-
           if (response.stop_reason === 'tool_use') {
             const toolUseBlocks = response.content.filter(
               (block): block is Anthropic.Messages.ToolUseBlock => block.type === 'tool_use',
@@ -78,7 +73,12 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
 
             // Append tool results as a user message
             messages.push({ role: 'user', content: toolResults })
+            continue
           }
+
+          // For end_turn, max_tokens, stop_sequence, or any other stop reason, return the text
+          const textBlock = response.content.find((block) => block.type === 'text')
+          return textBlock?.type === 'text' ? textBlock.text : ''
         }
 
         return yield* Effect.fail(
