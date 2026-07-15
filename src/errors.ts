@@ -28,3 +28,5 @@ export class XMLParsingError extends Data.TaggedError('XMLParsingError')<{ messa
 export class DatabaseError extends Data.TaggedError('DatabaseError')<{ message: string }> {}
 
 export class UnknownToolError extends Data.TaggedError('UnknownToolError')<{ message: string }> {}
+
+export class ReportError extends Data.TaggedError('ReportError')<{ message: string }> {}

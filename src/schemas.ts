@@ -78,6 +78,34 @@ export const InvoiceSchema = Schema.Struct({
   total: Schema.Number,
 })
 
+// A single invoice line that could not be classified into a category.
+export const ConflictLineSchema = Schema.Struct({
+  invoiceNumber: Schema.String, // "estab-ptoEmi-secuencial": used to order the CSV
+  description: Schema.String,
+  quantity: Schema.Number,
+  unitPrice: Schema.Number,
+  subtotal: Schema.Number,
+  reason: Schema.optional(Schema.String), // why it could not be classified
+})
+
+export const ConflictReportInputSchema = Schema.Struct({
+  successLines: Schema.Number,
+  conflictLines: Schema.Array(ConflictLineSchema),
+  outputDir: Schema.optional(Schema.String),
+})
+
+// The JSON report describing the outcome of a classification run.
+export const ConflictReportSchema = Schema.Struct({
+  successLines: Schema.Number,
+  conflictLines: Schema.Number,
+  conflictFile: Schema.String, // name of the CSV file holding the conflict detail
+  date: Schema.String, // ISO timestamp of when the report was generated
+})
+
+export type ConflictLine = Schema.Schema.Type<typeof ConflictLineSchema>
+export type ConflictReportInput = Schema.Schema.Type<typeof ConflictReportInputSchema>
+export type ConflictReport = Schema.Schema.Type<typeof ConflictReportSchema>
+
 export type Contributor = typeof ContributorSchema
 
 export type Invoice = Schema.Schema.Type<typeof InvoiceSchema>
