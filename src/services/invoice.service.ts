@@ -1,7 +1,7 @@
 import { Console, Effect, Schema } from 'effect'
 import { DbClient } from '../db/client.js'
 import { DatabaseError } from '../errors.js'
-import { type Invoice, InvoiceSchema } from './../schemas.js'
+import { type ClassifiedInvoice, InvoiceSchema } from './../schemas.js'
 
 // Header and total must reconcile within one cent to be considered balanced.
 const BALANCE_TOLERANCE = 0.01
@@ -11,7 +11,7 @@ export class InvoiceService extends Effect.Service<InvoiceService>()('app/Invoic
     const dbClient = yield* DbClient
 
     return {
-      createInvoice: (invoiceData: Invoice) =>
+      createInvoice: (invoiceData: ClassifiedInvoice) =>
         Effect.gen(function* () {
           yield* Console.log(`Creating invoice ${invoiceData.invoiceNumber} (${invoiceData.ruc})`)
 
@@ -55,18 +55,20 @@ export class InvoiceService extends Effect.Service<InvoiceService>()('app/Invoic
 
           const invoiceId = Number(result.lastInsertRowid)
 
-          // 3. Insert each detail line. Classification columns stay NULL so the
-          //    agent queue (idx_lines_pending) picks them up later.
+          // 3. Insert each detail line together with the category the agent
+          //    assigned, so the line leaves the pending queue (idx_lines_pending).
           yield* Effect.forEach(
             invoiceData.items,
             (item, index) =>
               dbClient.executeSql(
                 `INSERT INTO invoice_lines
                    (invoice_id, line_number, description, quantity, unit_price,
-                    subtotal, vat_rate, vat_amount)
+                    subtotal, vat_rate, vat_amount,
+                    tax_category, is_deductible, method, confidence)
                  VALUES
                    (@invoiceId, @lineNumber, @description, @quantity, @unitPrice,
-                    @subtotal, @vatRate, @vatAmount)`,
+                    @subtotal, @vatRate, @vatAmount,
+                    @taxCategory, @isDeductible, 'LLM', @confidence)`,
                 {
                   invoiceId,
                   lineNumber: index + 1,
@@ -76,6 +78,9 @@ export class InvoiceService extends Effect.Service<InvoiceService>()('app/Invoic
                   subtotal: item.subtotal,
                   vatRate: item.vatRate,
                   vatAmount: item.vatAmount,
+                  taxCategory: item.taxCategory,
+                  isDeductible: item.taxCategory === 'NO_DEDUCIBLE' ? 0 : 1,
+                  confidence: item.confidence,
                 },
               ),
             { discard: true },

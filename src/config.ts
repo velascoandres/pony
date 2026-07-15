@@ -13,6 +13,8 @@ export class ConfigService extends Effect.Service<ConfigService>()('app/config',
       docsPath: Config.string('DOCS_PATH'),
       dbPath: Config.string('DB_PATH'),
       ragTopK: Config.integer('RAG_TOP_K'),
+      maxToolCalls: Config.integer('MAX_TOOL_CALLS'),
+      confidenceThreshold: Config.number('CONFIDENCE_THRESHOLD'),
     })
 
     return { config }

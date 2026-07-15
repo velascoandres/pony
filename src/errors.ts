@@ -25,6 +25,10 @@ export class InvalidEstablishmentError extends Data.TaggedError('InvalidEstablis
 
 export class XMLParsingError extends Data.TaggedError('XMLParsingError')<{ message: string }> {}
 
+export class ReadDirectoryError extends Data.TaggedError('ReadDirectoryError')<{
+  message: string
+}> {}
+
 export class DatabaseError extends Data.TaggedError('DatabaseError')<{ message: string }> {}
 
 export class UnknownToolError extends Data.TaggedError('UnknownToolError')<{ message: string }> {}

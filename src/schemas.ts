@@ -56,6 +56,15 @@ export const TaxPayerRegistryResultSchema = Schema.Struct({
   error: Schema.optional(Schema.String),
 })
 
+export const InvoiceItemSchema = Schema.Struct({
+  description: Schema.String,
+  quantity: Schema.Number,
+  unitPrice: Schema.Number,
+  subtotal: Schema.Number, // precioTotalSinImpuesto
+  vatRate: Schema.Number, // 0, 12, 15
+  vatAmount: Schema.Number,
+})
+
 export const InvoiceSchema = Schema.Struct({
   accessKey: Schema.String, // claveAcceso — 49 chars, unique per invoice
   ruc: Schema.String,
@@ -63,19 +72,37 @@ export const InvoiceSchema = Schema.Struct({
   branchCode: Schema.String, // estab: "002"
   invoiceNumber: Schema.String, // "estab-ptoEmi-secuencial": "002-030-000123456"
   date: Schema.String,
-  items: Schema.Array(
-    Schema.Struct({
-      description: Schema.String,
-      quantity: Schema.Number,
-      unitPrice: Schema.Number,
-      subtotal: Schema.Number, // precioTotalSinImpuesto
-      vatRate: Schema.Number, // 0, 12, 15
-      vatAmount: Schema.Number,
-    }),
-  ),
+  items: Schema.Array(InvoiceItemSchema),
   subtotal: Schema.Number,
   iva: Schema.Number,
   total: Schema.Number,
+})
+
+// The expense categories the agent may assign — mirrors the CHECK constraint on
+// invoice_lines.tax_category.
+export const TaxCategorySchema = Schema.Literal(
+  'VIVIENDA',
+  'SALUD',
+  'EDUCACION',
+  'ALIMENTACION',
+  'VESTIMENTA',
+  'TURISMO',
+  'NEGOCIO',
+  'NO_DEDUCIBLE',
+)
+
+// An invoice line once the agent has assigned it a category. `confidence` below
+// CONFIDENCE_THRESHOLD routes the line to the conflict report.
+export const ClassifiedInvoiceItemSchema = Schema.Struct({
+  ...InvoiceItemSchema.fields,
+  taxCategory: TaxCategorySchema,
+  confidence: Schema.Number.pipe(Schema.between(0, 1)),
+  warning: Schema.optional(Schema.String),
+})
+
+export const ClassifiedInvoiceSchema = Schema.Struct({
+  ...InvoiceSchema.fields,
+  items: Schema.Array(ClassifiedInvoiceItemSchema),
 })
 
 // A single invoice line that could not be classified into a category.
@@ -109,6 +136,9 @@ export type ConflictReport = Schema.Schema.Type<typeof ConflictReportSchema>
 export type Contributor = typeof ContributorSchema
 
 export type Invoice = Schema.Schema.Type<typeof InvoiceSchema>
+export type TaxCategory = Schema.Schema.Type<typeof TaxCategorySchema>
+export type ClassifiedInvoiceItem = Schema.Schema.Type<typeof ClassifiedInvoiceItemSchema>
+export type ClassifiedInvoice = Schema.Schema.Type<typeof ClassifiedInvoiceSchema>
 
 export interface ToolDefinition {
   name: string

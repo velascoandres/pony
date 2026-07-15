@@ -1,5 +1,5 @@
 import { Console, Effect } from 'effect'
-import type { Invoice } from '../schemas.js'
+import type { ClassifiedInvoice } from '../schemas.js'
 import { InvoiceService } from '../services/invoice.service.js'
 
 export class SaveInvoiceInfoTool extends Effect.Service<SaveInvoiceInfoTool>()(
@@ -9,7 +9,7 @@ export class SaveInvoiceInfoTool extends Effect.Service<SaveInvoiceInfoTool>()(
       const invoiceService = yield* InvoiceService
 
       return {
-        execute: (invoice: Invoice) =>
+        execute: (invoice: ClassifiedInvoice) =>
           Effect.gen(function* () {
             // Save invoice to database
             const result = yield* invoiceService.createInvoice(invoice)

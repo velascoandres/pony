@@ -1,14 +1,24 @@
 import { FetchHttpClient } from '@effect/platform'
 import { NodeFileSystem, NodePath } from '@effect/platform-node'
-import { Effect, Layer } from 'effect'
+import { Cause, Console, Effect, Layer } from 'effect'
 import { AgentsLayer } from './agent/agents.layer.js'
+import { InvoiceAgent } from './agent/invoice.agent.js'
 import { ConfigService } from './config.js'
 import { DbClient } from './db/client.js'
 import { LLMService } from './llm/client.js'
 import { ServicesLayer } from './services/services.layer.js'
 import { ToolsLayer } from './tools/tool.layer.js'
 
-const MainLayer = Layer.mergeAll(LLMService.Default, AgentsLayer).pipe(
+// The agent's execute() resolves listInvoices (FileSystem/Path) and the SRI
+// lookup (SriService) lazily, so those have to stay in the program's context —
+// merging them here rather than only feeding them to the layers below.
+const MainLayer = Layer.mergeAll(
+  AgentsLayer,
+  ServicesLayer,
+  NodeFileSystem.layer,
+  NodePath.layer,
+).pipe(
+  Layer.provide(LLMService.Default),
   Layer.provide(ToolsLayer),
   Layer.provide(ServicesLayer),
   Layer.provide(DbClient.Default),
@@ -19,23 +29,18 @@ const MainLayer = Layer.mergeAll(LLMService.Default, AgentsLayer).pipe(
 )
 
 const program = Effect.gen(function* () {
-  // Example usage of the LLMClientPort
-  const llmClient = yield* LLMService
+  const invoiceAgent = yield* InvoiceAgent
 
-  const prompt = 'What is the capital of France?'
-  const systemPrompt = 'You are a helpful assistant.'
+  const report = yield* invoiceAgent.execute()
 
-  return yield* llmClient.ask(prompt, systemPrompt)
+  yield* Console.log(
+    `\nListo: ${report.successLines} línea(s) clasificada(s), ${report.conflictLines} en conflicto (${report.conflictFile})`,
+  )
 })
 
-const runnable = program.pipe(Effect.provide(MainLayer))
-
-const main = runnable.pipe(
-  Effect.catchTags({
-    AskLLMError: (error) => Effect.succeed(`AskLLMError: ${error.message}`),
-    NoTextContentError: (error) => Effect.succeed(`NoTextContentError: ${error.message}`),
-    ConfigError: (error) => Effect.succeed(`ConfigError: ${error}`),
-  }),
+const main = program.pipe(
+  Effect.provide(MainLayer),
+  Effect.tapErrorCause((cause) => Console.error(Cause.pretty(cause))),
 )
 
-Effect.runPromise(main)
+Effect.runPromise(main).catch(() => process.exit(1))
