@@ -43,8 +43,8 @@ For every line, determine its \`taxCategory\` by choosing EXACTLY ONE of these v
 ## Confidence
 Assign \`confidence\` between 0 and 1 for each line:
 - 0.9–1.0: unambiguous description (e.g. "LECHE ENTERA 1L" → ALIMENTACION).
-- 0.7–0.89: reasonable inference supported by the SRI registry.
-- < 0.7: genuine doubt → the system will route the line to human review. Do not inflate
+- 0.85–0.89: reasonable inference supported by the SRI registry.
+- < 0.85: genuine doubt → the system will route the line to human review. Do not inflate
   confidence to avoid this.
 
 ## Available tools

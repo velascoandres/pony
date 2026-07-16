@@ -14,9 +14,15 @@ export class SaveInvoiceInfoTool extends Effect.Service<SaveInvoiceInfoTool>()(
             // Save invoice to database
             const result = yield* invoiceService.createInvoice(invoice)
 
-            yield* Console.log(`Invoice saved with ID: ${result.invoiceId}`)
+            const { items, ...header } = invoice
 
-            yield* Console.table(invoice)
+            yield* Console.log(`\n✔ Invoice saved · ID ${result.invoiceId}`)
+
+            yield* Console.table(header).pipe(Console.withGroup({ label: 'Invoice Info' }))
+
+            yield* Console.table(items).pipe(
+              Console.withGroup({ label: `Invoice Items (${items.length})` }),
+            )
           }),
       }
     }),
