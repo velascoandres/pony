@@ -142,7 +142,7 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
       })
 
     return {
-      execute: () =>
+      executeAll: () =>
         Effect.gen(function* () {
           const invoiceFiles = yield* listInvoices
           yield* Console.log(`Found ${invoiceFiles.length} invoices to proccess.`)
@@ -173,6 +173,16 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
             successLines: totals.successLines,
             conflictLines: totals.conflictLines,
           })
+        }),
+      executeSingle: (invoiceFilePath: string) =>
+        Effect.gen(function* () {
+          const outcome = yield* processInvoice(invoiceFilePath)
+
+          yield* Console.log(
+            `\nClassified ${outcome.successLines} lines; ${outcome.conflictLines.length} lines need human review.`,
+          )
+
+          return yield* saveConflictReportTool.execute(outcome)
         }),
     }
   }),

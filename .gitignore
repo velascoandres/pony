@@ -9,3 +9,5 @@ coverage/
 *.tsbuildinfo
 .claude/
 invoices/*.xml
+db/*.db*
+reports/*

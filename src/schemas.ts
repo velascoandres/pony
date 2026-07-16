@@ -125,7 +125,7 @@ export const ConflictReportInputSchema = Schema.Struct({
 export const ConflictReportSchema = Schema.Struct({
   successLines: Schema.Number,
   conflictLines: Schema.Number,
-  conflictFile: Schema.String, // name of the CSV file holding the conflict detail
+  conflictFile: Schema.optional(Schema.String), // path to the CSV of conflicts
   date: Schema.String, // ISO timestamp of when the report was generated
 })
 

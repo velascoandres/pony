@@ -28,7 +28,7 @@ const MainLive = Layer.mergeAll(
 const program = Effect.gen(function* () {
   const invoiceAgent = yield* InvoiceAgent
 
-  const report = yield* invoiceAgent.execute()
+  const report = yield* invoiceAgent.executeAll()
 
   yield* Console.log(
     `\nReady: ${report.successLines} success lines, ${report.conflictLines} lines with conflictsa (${report.conflictFile})`,

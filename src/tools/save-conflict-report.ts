@@ -47,7 +47,7 @@ export class SaveConflictReportTool extends Effect.Service<SaveConflictReportToo
               a.invoiceNumber.localeCompare(b.invoiceNumber),
             )
 
-            const conflictFile = `conflicts-${stamp}.csv`
+            const conflictFile = input.conflictLines ? `conflicts-${stamp}.csv` : undefined
             const reportFile = `summary-${stamp}.json`
 
             const report: ConflictReport = {
@@ -73,18 +73,24 @@ export class SaveConflictReportTool extends Effect.Service<SaveConflictReportToo
               ),
             )
 
-            yield* Effect.all([
-              fs.writeFileString(path.join(outputDir, conflictFile), toCsv(orderedLines)),
-              fs.writeFileString(
-                path.join(outputDir, reportFile),
-                JSON.stringify(encoded, null, 2),
-              ),
-            ]).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new ReportError({ message: `Could not write report files: ${cause.message}` }),
-              ),
-            )
+            if (conflictFile) {
+              yield* Effect.all([
+                fs.writeFileString(path.join(outputDir, conflictFile), toCsv(orderedLines)),
+                fs.writeFileString(
+                  path.join(outputDir, reportFile),
+                  JSON.stringify(encoded, null, 2),
+                ),
+              ]).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ReportError({ message: `Could not write report files: ${cause.message}` }),
+                ),
+              )
+            } else {
+              yield* Console.log(
+                `No conflicts found; writing only summary report to ${path.join(outputDir, reportFile)}`,
+              )
+            }
 
             yield* Console.log(
               `Report saved to ${path.join(outputDir, reportFile)} (${report.successLines} classified, ${report.conflictLines} in conflict)`,
