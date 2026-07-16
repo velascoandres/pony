@@ -129,23 +129,7 @@ export const ConflictReportSchema = Schema.Struct({
   date: Schema.String, // ISO timestamp of when the report was generated
 })
 
-export type ConflictLine = Schema.Schema.Type<typeof ConflictLineSchema>
-export type ConflictReportInput = Schema.Schema.Type<typeof ConflictReportInputSchema>
-export type ConflictReport = Schema.Schema.Type<typeof ConflictReportSchema>
-
-export type Contributor = typeof ContributorSchema
-
-export type Invoice = Schema.Schema.Type<typeof InvoiceSchema>
-export type TaxCategory = Schema.Schema.Type<typeof TaxCategorySchema>
-export type ClassifiedInvoiceItem = Schema.Schema.Type<typeof ClassifiedInvoiceItemSchema>
-export type ClassifiedInvoice = Schema.Schema.Type<typeof ClassifiedInvoiceSchema>
-
-export interface ToolDefinition {
-  name: string
-  description: string
-  input_schema: {
-    type: 'object'
-    properties: Record<string, unknown>
-    required?: string[]
-  }
-}
+// Tool inputs arrive as untrusted model output — decode them before use.
+export const ParseInvoiceInput = Schema.Struct({ invoiceFilePath: Schema.String })
+export const GetFiscalInfoInput = Schema.Struct({ ruc: Schema.String })
+export const SaveInvoiceInfoInput = Schema.Struct({ invoiceInfo: ClassifiedInvoiceSchema })

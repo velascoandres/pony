@@ -1,15 +1,8 @@
-// `block.name` is an open string coming from the model, so there is no closed
-
 import type Anthropic from '@anthropic-ai/sdk'
 import { Effect, Match, type ParseResult, Schema } from 'effect'
 import { UnknownToolError } from '../errors.js'
-import { ClassifiedInvoiceSchema } from '../schemas.js'
-import type { ToolCall } from './tool-executer.js'
-
-// Tool inputs arrive as untrusted model output — decode them before use.
-const ParseInvoiceInput = Schema.Struct({ invoiceFilePath: Schema.String })
-const GetFiscalInfoInput = Schema.Struct({ ruc: Schema.String })
-const SaveInvoiceInfoInput = Schema.Struct({ invoiceInfo: ClassifiedInvoiceSchema })
+import { GetFiscalInfoInput, ParseInvoiceInput, SaveInvoiceInfoInput } from '../schemas.js'
+import type { ToolCall } from '../types.js'
 
 // union to be exhaustive over — an unrecognised name falls through to orElse.
 export const decodeToolCall = (

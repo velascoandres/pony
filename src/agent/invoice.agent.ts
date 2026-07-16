@@ -2,18 +2,13 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { Console, Effect, Either } from 'effect'
 import { ConfigService } from '../config.js'
 import { LLMService } from '../llm/client.js'
-import type { ClassifiedInvoice, ConflictLine } from '../schemas.js'
 import { SaveConflictReportTool } from '../tools/save-conflict-report.js'
+import type { ClassifiedInvoice, ConflictLine, InvoiceOutcome } from '../types.js'
 import { listInvoices } from '../utils/list-invoices.js'
 import { AGENT_SYSTEM_PROMPT } from './system-prompt.js'
 import { decodeToolCall } from './tool-decoder.js'
 import { ToolExecuter } from './tool-executer.js'
 import { ALL_TOOL_DEFINITIONS } from './tool-registry.js'
-
-interface InvoiceOutcome {
-  readonly successLines: number
-  readonly conflictLines: readonly ConflictLine[]
-}
 
 const EMPTY_OUTCOME: InvoiceOutcome = { successLines: 0, conflictLines: [] }
 

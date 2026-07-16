@@ -1,17 +1,11 @@
 import { FileSystem, Path } from '@effect/platform'
 import { Console, Effect, Schema } from 'effect'
 import { ReportError } from '../errors.js'
-import {
-  type ConflictLine,
-  type ConflictReport,
-  type ConflictReportInput,
-  ConflictReportSchema,
-} from '../schemas.js'
+import { ConflictReportSchema } from '../schemas.js'
+import type { ConflictLine, ConflictReport, ConflictReportInput } from '../types.js'
 
 const CSV_HEADER = ['invoiceNumber', 'description', 'quantity', 'unitPrice', 'subtotal', 'reason']
 
-// Quote a value only when it contains characters that would break CSV parsing,
-// doubling any embedded quotes as the RFC 4180 spec requires.
 const csvCell = (value: string | number | undefined): string => {
   const text = value === undefined ? '' : String(value)
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text

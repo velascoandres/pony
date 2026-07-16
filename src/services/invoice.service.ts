@@ -1,7 +1,8 @@
 import { Console, Effect, Schema } from 'effect'
 import { DbClient } from '../db/client.js'
 import { DatabaseError } from '../errors.js'
-import { type ClassifiedInvoice, InvoiceSchema } from './../schemas.js'
+import { InvoiceSchema } from '../schemas.js'
+import type { ClassifiedInvoice } from '../types.js'
 
 // Header and total must reconcile within one cent to be considered balanced.
 const BALANCE_TOLERANCE = 0.01

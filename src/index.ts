@@ -9,10 +9,7 @@ import { LLMService } from './llm/client.js'
 import { ServicesLayer } from './services/services.layer.js'
 import { ToolsLayer } from './tools/tool.layer.js'
 
-// The agent's execute() resolves listInvoices (FileSystem/Path) and the SRI
-// lookup (SriService) lazily, so those have to stay in the program's context —
-// merging them here rather than only feeding them to the layers below.
-const MainLayer = Layer.mergeAll(
+const MainLive = Layer.mergeAll(
   AgentsLayer,
   ServicesLayer,
   NodeFileSystem.layer,
@@ -34,12 +31,12 @@ const program = Effect.gen(function* () {
   const report = yield* invoiceAgent.execute()
 
   yield* Console.log(
-    `\nListo: ${report.successLines} línea(s) clasificada(s), ${report.conflictLines} en conflicto (${report.conflictFile})`,
+    `\nReady: ${report.successLines} success lines, ${report.conflictLines} lines with conflictsa (${report.conflictFile})`,
   )
 })
 
 const main = program.pipe(
-  Effect.provide(MainLayer),
+  Effect.provide(MainLive),
   Effect.tapErrorCause((cause) => Console.error(Cause.pretty(cause))),
 )
 

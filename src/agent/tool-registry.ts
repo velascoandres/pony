@@ -1,4 +1,4 @@
-import type { ToolDefinition } from '../schemas.js'
+import type { ToolDefinition } from '../types.js'
 
 const TAX_CATEGORIES = [
   'VIVIENDA',

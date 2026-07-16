@@ -1,6 +1,6 @@
 import { Console, Effect } from 'effect'
-import type { ClassifiedInvoice } from '../schemas.js'
 import { InvoiceService } from '../services/invoice.service.js'
+import type { ClassifiedInvoice } from '../types.js'
 
 export class SaveInvoiceInfoTool extends Effect.Service<SaveInvoiceInfoTool>()(
   'app/SaveInvoiceInfoTool',
