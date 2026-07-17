@@ -53,6 +53,14 @@ export class GetFiscalInfoTool extends Effect.Service<GetFiscalInfoTool>()(
               sriService.getEstablishment(validatedRuc),
             ])
 
+            if (contributor === undefined) {
+              return yield* Schema.decode(TaxPayerRegistryResultSchema)({
+                ok: false,
+                source: 'sri' as const,
+                error: `SRI returned no contributor for RUC ${validatedRuc}`,
+              })
+            }
+
             // Parse contributor and establishment to TaxPayerRegistryResultSchema
             return yield* Schema.decode(TaxPayerRegistryResultSchema)({
               ok: true,

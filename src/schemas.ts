@@ -18,6 +18,8 @@ export const SriContributorRaw = Schema.Struct({
   ),
 })
 
+export const SriContributorRawResponse = Schema.Array(SriContributorRaw)
+
 export const SriWEstablishmentRaw = Schema.Struct({
   numeroEstablecimiento: Schema.optional(Schema.String),
   nombreFantasiaComercial: Schema.optional(Schema.String),
@@ -25,6 +27,8 @@ export const SriWEstablishmentRaw = Schema.Struct({
   estado: Schema.optional(Schema.String),
   matriz: Schema.optional(Schema.String), // "SI" | "NO"
 })
+
+export const SriWEstablishmentRawResponse = Schema.Array(SriWEstablishmentRaw)
 
 // Parsed data structures for internal use
 export const ContributorSchema = Schema.Struct({
