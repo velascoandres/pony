@@ -109,6 +109,49 @@ On each run the agent writes two files to `reports/`, timestamped:
   agent's `rationale`, so a human can reconcile it against the source invoice.
 - `summary-<timestamp>.json` — counts of classified vs. conflicting lines.
 
+## Example output
+
+### What is stored in the database
+
+Each processed invoice becomes one header row in `invoices` plus one row per line in
+`invoice_lines` (the issuer is cached in `suppliers`). For example, after classifying an
+invoice, the tables hold:
+
+> All values below are **fictitious**, for illustration only.
+
+**`invoices`**
+
+| id | access_key                | supplier_ruc  | invoice_number    | issue_date | subtotal | vat  | total | process_status |
+| -- | ------------------------- | ------------- | ----------------- | ---------- | -------- | ---- | ----- | -------------- |
+| 1  | `0000…0000000000000` (49) | 9999999999001 | 001-001-000000001 | 2026-01-01 | 22.00    | 3.00 | 25.00 | CLASIFICADA    |
+
+**`invoice_lines`** (note `rationale` and `confidence` per line)
+
+| id | invoice_id | line_number | description        | quantity | unit_price | subtotal | tax_category | is_deductible | method | confidence | rationale                                                                     |
+| -- | ---------- | ----------- | ------------------ | -------- | ---------- | -------- | ------------ | ------------- | ------ | ---------- | ----------------------------------------------------------------------------- |
+| 1  | 1          | 1           | SAMPLE FOOD ITEM   | 2        | 1.00       | 2.00     | ALIMENTACION | 1             | LLM    | 0.97       | Basic non-alcoholic food item.                                                |
+| 2  | 1          | 2           | SAMPLE MEMBERSHIP  | 1        | 20.00      | 20.00    | NO_DEDUCIBLE | 0             | LLM    | 0.60       | A club/gym membership is a service, not clothing; brand names in the text are ignored. |
+
+### `reports/summary-<timestamp>.json`
+
+```json
+{
+  "successLines": 1,
+  "conflictLines": 1,
+  "conflictFile": "conflicts-2026-01-01T00-00-00-000Z.csv",
+  "date": "2026-01-01T00:00:00.000Z"
+}
+```
+
+### `reports/conflicts-<timestamp>.csv`
+
+Only the lines that scored below `CONFIDENCE_THRESHOLD` land here, so a human can review them:
+
+```csv
+invoiceNumber,description,quantity,unitPrice,subtotal,reason,rationale
+001-001-000000001,SAMPLE MEMBERSHIP,1,20.00,20.00,Confidence 0.6 < 0.85 (suggested category: NO_DEDUCIBLE),A club/gym membership is a service, not clothing; brand names in the text are ignored.
+```
+
 ## Useful scripts
 
 ```bash
