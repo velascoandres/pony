@@ -65,11 +65,11 @@ export class InvoiceService extends Effect.Service<InvoiceService>()('app/Invoic
                 `INSERT INTO invoice_lines
                    (invoice_id, line_number, description, quantity, unit_price,
                     subtotal, vat_rate, vat_amount,
-                    tax_category, is_deductible, method, confidence)
+                    tax_category, is_deductible, method, confidence, rationale)
                  VALUES
                    (@invoiceId, @lineNumber, @description, @quantity, @unitPrice,
                     @subtotal, @vatRate, @vatAmount,
-                    @taxCategory, @isDeductible, 'LLM', @confidence)`,
+                    @taxCategory, @isDeductible, 'LLM', @confidence, @rationale)`,
                 {
                   invoiceId,
                   lineNumber: index + 1,
@@ -82,6 +82,7 @@ export class InvoiceService extends Effect.Service<InvoiceService>()('app/Invoic
                   taxCategory: item.taxCategory,
                   isDeductible: item.taxCategory === 'NO_DEDUCIBLE' ? 0 : 1,
                   confidence: item.confidence,
+                  rationale: item.rationale,
                 },
               ),
             { discard: true },

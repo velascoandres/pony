@@ -36,6 +36,7 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
           reason:
             item.warning ??
             `Confidence ${item.confidence} < ${CONFIDENCE_THRESHOLD} (suggested category: ${item.taxCategory})`,
+          rationale: item.rationale,
         }))
 
       return { successLines: invoice.items.length - conflictLines.length, conflictLines }
@@ -83,9 +84,6 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
               let outcome = state.outcome
 
               for (const block of toolUses) {
-                // Failures come back to the model as tool_result errors so it
-                // can correct course within the remaining budget, rather than
-                // aborting the invoice.
                 const attempt = yield* decodeToolCall(block).pipe(
                   Effect.flatMap((call) =>
                     toolExecuter.execute(call).pipe(Effect.map((result) => ({ call, result }))),

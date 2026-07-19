@@ -43,8 +43,6 @@ const GET_FISCAL_INVOICE_TOOL: ToolDefinition = {
   },
 }
 
-// The line shape mirrors ClassifiedInvoiceItemSchema — the agent decodes this
-// input through that schema before persisting it.
 const CLASSIFIED_ITEM_SCHEMA = {
   type: 'object',
   properties: {
@@ -58,6 +56,11 @@ const CLASSIFIED_ITEM_SCHEMA = {
     confidence: {
       type: 'number',
       description: 'Confidence in the assigned category, between 0 and 1.',
+    },
+    rationale: {
+      type: 'string',
+      description:
+        'One short sentence justifying the category. Write it BEFORE deciding: identify the actual good/service, ignore brand names in the description, and note if the text is truncated (e.g. "MEMBRES-A" = "MEMBRESÍA").',
     },
     warning: {
       type: 'string',
@@ -73,6 +76,7 @@ const CLASSIFIED_ITEM_SCHEMA = {
     'vatAmount',
     'taxCategory',
     'confidence',
+    'rationale',
   ],
 }
 
@@ -116,9 +120,6 @@ const SAVE_INVOICE_INFO_TOOL: ToolDefinition = {
   },
 }
 
-// save_conflict_report_tool is intentionally absent: the agent loop collects the
-// low-confidence lines across every invoice and writes the report itself once
-// the whole run finishes.
 export const ALL_TOOL_DEFINITIONS: ToolDefinition[] = [
   PARSE_INVOICE_TOOL,
   GET_FISCAL_INVOICE_TOOL,

@@ -4,7 +4,15 @@ import { ReportError } from '../errors.js'
 import { ConflictReportSchema } from '../schemas.js'
 import type { ConflictLine, ConflictReport, ConflictReportInput } from '../types.js'
 
-const CSV_HEADER = ['invoiceNumber', 'description', 'quantity', 'unitPrice', 'subtotal', 'reason']
+const CSV_HEADER = [
+  'invoiceNumber',
+  'description',
+  'quantity',
+  'unitPrice',
+  'subtotal',
+  'reason',
+  'rationale',
+]
 
 const csvCell = (value: string | number | undefined): string => {
   const text = value === undefined ? '' : String(value)
@@ -20,6 +28,7 @@ const toCsv = (lines: readonly ConflictLine[]): string => {
       line.unitPrice,
       line.subtotal,
       line.reason,
+      line.rationale,
     ]
       .map(csvCell)
       .join(','),

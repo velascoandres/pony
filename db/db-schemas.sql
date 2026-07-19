@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS invoice_lines (
     is_deductible  INTEGER DEFAULT 0 CHECK (is_deductible IN (0,1)),
     method         TEXT CHECK (method IN ('REGLA','LLM','HUMANO')),
     confidence     REAL CHECK (confidence BETWEEN 0 AND 1),
+    rationale      TEXT,                    -- justificación en 1 frase de la categoría
     UNIQUE (invoice_id, line_number)
 );
 

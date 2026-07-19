@@ -101,6 +101,10 @@ export const ClassifiedInvoiceItemSchema = Schema.Struct({
   ...InvoiceItemSchema.fields,
   taxCategory: TaxCategorySchema,
   confidence: Schema.Number.pipe(Schema.between(0, 1)),
+  // One-line justification the agent must write BEFORE settling on a category.
+  // Forcing the reasoning reduces anchoring on brand names and surfaces the
+  // "why" in the conflict report for the human reviewer.
+  rationale: Schema.String,
   warning: Schema.optional(Schema.String),
 })
 
@@ -117,6 +121,7 @@ export const ConflictLineSchema = Schema.Struct({
   unitPrice: Schema.Number,
   subtotal: Schema.Number,
   reason: Schema.optional(Schema.String), // why it could not be classified
+  rationale: Schema.optional(Schema.String), // the agent's own justification for the (uncertain) category
 })
 
 export const ConflictReportInputSchema = Schema.Struct({
