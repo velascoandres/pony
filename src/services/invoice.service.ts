@@ -1,8 +1,8 @@
 import { Console, Effect, Schema } from 'effect'
 import { DbClient } from '../db/client.js'
 import { DatabaseError } from '../errors.js'
-import { InvoiceSchema } from '../schemas.js'
-import type { ClassifiedInvoice } from '../types.js'
+import { CategoryExpenseReportSchema, InvoiceSchema } from '../schemas.js'
+import type { ClassifiedInvoice, TaxCategory } from '../types.js'
 
 // Header and total must reconcile within one cent to be considered balanced.
 const BALANCE_TOLERANCE = 0.01
@@ -163,6 +163,46 @@ export class InvoiceService extends Effect.Service<InvoiceService>()('app/Invoic
           yield* Console.log(`Found ${invoices.length} invoices for supplier ${ruc}`)
           return invoices
         }).pipe(Effect.tapError((error) => Console.error(`Failed to fetch invoices: ${error}`))),
+      getExpenseReportByCategory: () =>
+        Effect.gen(function* () {
+          yield* Console.log('Building general expense report by category')
+
+          // Aggregate the classified lines by category. Only balanced invoices
+          // (is_balanced = 1) and already-classified lines (tax_category NOT
+          // NULL — see idx_lines_pending) count towards the report. Rounding to
+          // two decimals keeps the summed cents from drifting into float noise.
+          const rows = yield* dbClient.query<{
+            category: TaxCategory
+            lineCount: number
+            base: number
+            vat: number
+            total: number
+            deductible: number
+          }>(
+            `SELECT l.tax_category                            AS category,
+                    COUNT(*)                                  AS lineCount,
+                    ROUND(SUM(l.subtotal), 2)                 AS base,
+                    ROUND(SUM(l.vat_amount), 2)               AS vat,
+                    ROUND(SUM(l.subtotal + l.vat_amount), 2)  AS total,
+                    ROUND(SUM(CASE WHEN l.is_deductible = 1
+                                   THEN l.subtotal ELSE 0 END), 2) AS deductible
+             FROM invoice_lines l
+             JOIN invoices i ON i.id = l.invoice_id
+             WHERE l.tax_category IS NOT NULL
+               AND i.is_balanced = 1
+             GROUP BY l.tax_category
+             ORDER BY total DESC`,
+          )
+
+          const report = yield* Schema.decodeUnknown(CategoryExpenseReportSchema)(rows).pipe(
+            Effect.mapError((cause) => new DatabaseError({ message: String(cause) })),
+          )
+
+          yield* Console.log(`Expense report built with ${report.length} categories`)
+          return report
+        }).pipe(
+          Effect.tapError((error) => Console.error(`Failed to build expense report: ${error}`)),
+        ),
     }
   }),
 }) {}

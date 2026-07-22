@@ -3,6 +3,7 @@ import { Console, Effect, Either } from 'effect'
 import { ConfigService } from '../config.js'
 import { LLMService } from '../llm/client.js'
 import { SaveConflictReportTool } from '../tools/save-conflict-report.js'
+import { SaveExpenseReportTool } from '../tools/save-expense-report.js'
 import type { ClassifiedInvoice, ConflictLine, InvoiceOutcome } from '../types.js'
 import { listInvoices } from '../utils/list-invoices.js'
 import { AGENT_SYSTEM_PROMPT } from './system-prompt.js'
@@ -17,6 +18,7 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
     const toolExecuter = yield* ToolExecuter
     const llm = yield* LLMService
     const saveConflictReportTool = yield* SaveConflictReportTool
+    const saveExpenseReportTool = yield* SaveExpenseReportTool
     const { config } = yield* ConfigService
 
     const CONFIDENCE_THRESHOLD = config.confidenceThreshold
@@ -167,10 +169,14 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
             `\nClassified ${totals.successLines} lines; ${totals.conflictLines.length} lines need human review.`,
           )
 
-          return yield* saveConflictReportTool.execute({
+          const report = yield* saveConflictReportTool.execute({
             successLines: totals.successLines,
             conflictLines: totals.conflictLines,
           })
+
+          yield* saveExpenseReportTool.execute()
+
+          return report
         }),
       executeSingle: (invoiceFilePath: string) =>
         Effect.gen(function* () {
@@ -180,7 +186,11 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
             `\nClassified ${outcome.successLines} lines; ${outcome.conflictLines.length} lines need human review.`,
           )
 
-          return yield* saveConflictReportTool.execute(outcome)
+          const report = yield* saveConflictReportTool.execute(outcome)
+
+          yield* saveExpenseReportTool.execute()
+
+          return report
         }),
     }
   }),

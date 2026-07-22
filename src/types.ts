@@ -1,11 +1,14 @@
 import type { Effect, Schema } from 'effect'
 import type {
+  CategoryExpenseReportSchema,
+  CategoryExpenseSchema,
   ClassifiedInvoiceItemSchema,
   ClassifiedInvoiceSchema,
   ConflictLineSchema,
   ConflictReportInputSchema,
   ConflictReportSchema,
   ContributorSchema,
+  ExpenseReportResultSchema,
   InvoiceSchema,
   TaxCategorySchema,
 } from './schemas.js'
@@ -42,6 +45,10 @@ export type ConflictReportInput = Schema.Schema.Type<typeof ConflictReportInputS
 export type ConflictReport = Schema.Schema.Type<typeof ConflictReportSchema>
 
 export type Contributor = typeof ContributorSchema
+
+export type CategoryExpense = Schema.Schema.Type<typeof CategoryExpenseSchema>
+export type CategoryExpenseReport = Schema.Schema.Type<typeof CategoryExpenseReportSchema>
+export type ExpenseReportResult = Schema.Schema.Type<typeof ExpenseReportResultSchema>
 
 export type Invoice = Schema.Schema.Type<typeof InvoiceSchema>
 export type TaxCategory = Schema.Schema.Type<typeof TaxCategorySchema>

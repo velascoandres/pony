@@ -138,6 +138,27 @@ export const ConflictReportSchema = Schema.Struct({
   date: Schema.String, // ISO timestamp of when the report was generated
 })
 
+// A single row of the general expenses-by-category report: one aggregate per
+// tax_category over the balanced, already-classified invoice lines.
+export const CategoryExpenseSchema = Schema.Struct({
+  category: TaxCategorySchema,
+  lineCount: Schema.Number, // number of invoice lines in the category
+  base: Schema.Number, // SUM(subtotal) — taxable base
+  vat: Schema.Number, // SUM(vat_amount)
+  total: Schema.Number, // base + vat
+  deductible: Schema.Number, // base of the lines flagged is_deductible = 1
+})
+
+export const CategoryExpenseReportSchema = Schema.Array(CategoryExpenseSchema)
+
+// The outcome of rendering the HTML expenses report to disk.
+export const ExpenseReportResultSchema = Schema.Struct({
+  reportFile: Schema.String, // path to the generated HTML file
+  categories: Schema.Number, // number of categories in the report
+  total: Schema.Number, // grand total (base + vat) across categories
+  date: Schema.String, // ISO timestamp of when the report was generated
+})
+
 // Tool inputs arrive as untrusted model output — decode them before use.
 export const ParseInvoiceInput = Schema.Struct({ invoiceFilePath: Schema.String })
 export const GetFiscalInfoInput = Schema.Struct({ ruc: Schema.String })

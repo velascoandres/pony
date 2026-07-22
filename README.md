@@ -39,8 +39,17 @@ flowchart TD
     H -- no --> J[Trusted line]
     I --> K[Write reports/ CSV + summary]
     J --> K
-    K --> L[End]
+    K --> M[save_expense_report_tool<br/>render HTML report from<br/>category totals + EJS template]
+    M --> L[End]
 ```
+
+Once every invoice is classified and persisted, the batch closes by writing its
+report files to `reports/`: the conflict CSV + JSON summary, and a polished,
+responsive **HTML report of expenses by category**. The HTML is produced by
+rendering the [`templates/expense-report.ejs`](templates/expense-report.ejs)
+template against the aggregated data returned by
+`InvoiceService.getExpenseReportByCategory()` — no HTML is built in TypeScript,
+so the model spends no tokens generating markup.
 
 The reasoning/tool loop is capped at `MAX_TOOL_CALLS` iterations per invoice to avoid
 runaway loops; `save_invoice_info_tool` is always the final step for each invoice.
@@ -100,14 +109,20 @@ pnpm dev        # same, but restarts on file changes (watch mode)
 | ------------- | ----------------------------------------------------------------------------- |
 | `invoices/`   | **Input.** Drop the `invoice` XML files to be analyzed here.                   |
 | `reports/`    | **Output.** The agent writes its analysis here.                               |
+| `templates/`  | EJS templates for the rendered reports (e.g. `expense-report.ejs`).           |
 | `db/`         | SQLite database and the `db-schemas.sql` DDL.                                  |
 | `src/`        | Agent, tools, services and schemas.                                           |
 
-On each run the agent writes two files to `reports/`, timestamped:
+On each run the agent writes three files to `reports/`, timestamped:
 
 - `conflicts-<timestamp>.csv` — one row per low-confidence line, with its `reason` and the
-  agent's `rationale`, so a human can reconcile it against the source invoice.
+  agent's `rationale`, so a human can reconcile it against the source invoice. Written only
+  when there is at least one conflicting line.
 - `summary-<timestamp>.json` — counts of classified vs. conflicting lines.
+- `report-<timestamp>.html` — a polished, responsive report of **expenses by category**
+  (base, IVA, total, deductible base and share of the total per rubro), rendered from the
+  `templates/expense-report.ejs` template. Always generated at the end of the run, even when
+  there are no conflicts (it renders an empty-state message if nothing was classified yet).
 
 ## Example output
 
@@ -151,6 +166,20 @@ Only the lines that scored below `CONFIDENCE_THRESHOLD` land here, so a human ca
 invoiceNumber,description,quantity,unitPrice,subtotal,reason,rationale
 001-001-000000001,SAMPLE MEMBERSHIP,1,20.00,20.00,Confidence 0.6 < 0.85 (suggested category: NO_DEDUCIBLE),A club/gym membership is a service, not clothing; brand names in the text are ignored.
 ```
+
+### `reports/report-<timestamp>.html`
+
+A self-contained (inline CSS, light/dark aware) HTML report summarizing every classified,
+balanced line grouped by category. It opens with summary cards (total spend, deductible
+base, taxable base, IVA) and a per-category table:
+
+| Categoría    | Líneas | Base   | IVA   | Total  | Deducible | % del total |
+| ------------ | ------ | ------ | ----- | ------ | --------- | ----------- |
+| Alimentación | 1      | $2.00  | $0.30 | $2.30  | $2.00     | 8.4%        |
+| No deducible | 1      | $20.00 | $3.00 | $23.00 | —         | 91.6%       |
+
+The data comes from `InvoiceService.getExpenseReportByCategory()`, which aggregates
+`invoice_lines` (only classified lines on balanced invoices) by `tax_category`.
 
 ## Useful scripts
 
