@@ -3,24 +3,33 @@
   //   generatedAt : ISO timestamp string
   //   categories  : CategoryExpense[] (already ordered by total DESC)
   //   totals      : { base, vat, total, deductible, lineCount }
-  // All monetary formatting happens here so the tool stays data-only.
-  const money = (n) =>
-    new Intl.NumberFormat('es-EC', { style: 'currency', currency: 'USD' }).format(n || 0)
-  const pct = (part, whole) => (whole > 0 ? ((part / whole) * 100) : 0)
+  // Design mirrors the "Dashboard Gastos" reference: a dark analytics page with
+  // KPI cards, Chart.js charts and a detail table. All formatting happens here
+  // so the tool stays data-only.
+
+  // "$3.015,90" style money (dot thousands, comma decimals).
+  const money = (n) => {
+    const parts = (Math.round((n || 0) * 100) / 100).toFixed(2).split('.')
+    return '$' + parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + parts[1]
+  }
+  const pct = (part, whole) => (whole > 0 ? (part / whole) * 100 : 0)
+  const pctLabel = (part, whole) => pct(part, whole).toFixed(1).replace('.', ',') + '%'
+
   const generated = new Date(generatedAt)
   const generatedLabel = new Intl.DateTimeFormat('es-EC', {
     dateStyle: 'long',
     timeStyle: 'short',
   }).format(generated)
-  // Palette per category — stable colors so the same rubro always looks the same.
+
+  // Bright-on-dark palette; stable per rubro.
   const COLORS = {
-    VIVIENDA: '#2563eb',
-    SALUD: '#dc2626',
-    EDUCACION: '#7c3aed',
-    ALIMENTACION: '#16a34a',
-    VESTIMENTA: '#db2777',
-    TURISMO: '#0891b2',
-    NEGOCIO: '#ea580c',
+    VIVIENDA: '#60a5fa',
+    SALUD: '#f87171',
+    EDUCACION: '#a855f7',
+    ALIMENTACION: '#34d399',
+    VESTIMENTA: '#f472b6',
+    TURISMO: '#22d3ee',
+    NEGOCIO: '#fb923c',
     NO_DEDUCIBLE: '#64748b',
   }
   const LABELS = {
@@ -35,6 +44,28 @@
   }
   const color = (c) => COLORS[c] || '#64748b'
   const label = (c) => LABELS[c] || c
+  const glow = (c) => {
+    const h = color(c).replace('#', '')
+    const r = parseInt(h.slice(0, 2), 16)
+    const g = parseInt(h.slice(2, 4), 16)
+    const b = parseInt(h.slice(4, 6), 16)
+    return `rgba(${r},${g},${b},0.6)`
+  }
+
+  const dedPct = pct(totals.deductible, totals.base)
+
+  // Data handed to Chart.js as one JSON blob.
+  const chart = {
+    labels: categories.map((r) => label(r.category)),
+    colors: categories.map((r) => color(r.category)),
+    total: categories.map((r) => r.total),
+    base: categories.map((r) => r.base),
+    vat: categories.map((r) => r.vat),
+    totalsBase: totals.base,
+    totalsVat: totals.vat,
+    grandTotal: totals.total,
+    dedPct: Number(dedPct.toFixed(2)),
+  }
 %>
 <!DOCTYPE html>
 <html lang="es">
@@ -42,206 +73,291 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Reporte de gastos por categoría</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
-    :root {
-      --bg: #f1f5f9;
-      --card: #ffffff;
-      --ink: #0f172a;
-      --muted: #64748b;
-      --border: #e2e8f0;
-      --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 8px 24px rgba(15, 23, 42, 0.05);
-      --radius: 14px;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0b1120;
-        --card: #111a2e;
-        --ink: #e2e8f0;
-        --muted: #94a3b8;
-        --border: #22304d;
-        --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
-      }
-    }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
-      color: var(--ink);
-      line-height: 1.5;
+      background: #070b16;
+      font-family: 'Sora', system-ui, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
-    .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
-    header.report-head { margin-bottom: 28px; }
-    header.report-head h1 {
-      margin: 0 0 6px;
-      font-size: clamp(1.5rem, 4vw, 2rem);
-      letter-spacing: -0.02em;
+    a { color: #34d399; text-decoration: none; }
+    a:hover { color: #5eead4; }
+    @keyframes floatIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .mono { font-family: 'IBM Plex Mono', monospace; }
+    .dash-pad { padding: 44px 48px 40px; }
+    .dash-h1 { font-size: 40px; }
+    .tbl-scroll { overflow-x: auto; }
+    .tbl-scroll > div { min-width: 660px; }
+    @media (max-width: 640px) {
+      .dash-pad { padding: 24px 18px 30px; }
+      .dash-h1 { font-size: 28px; }
     }
-    header.report-head p { margin: 0; color: var(--muted); font-size: 0.9rem; }
-
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px;
-      margin-bottom: 32px;
-    }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 18px 20px;
-      box-shadow: var(--shadow);
-    }
-    .card .k { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-    .card .v { font-size: 1.55rem; font-weight: 700; margin-top: 6px; letter-spacing: -0.02em; }
-    .card .sub { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
-    .card.accent .v { color: #16a34a; }
-
-    .panel {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-    .panel h2 {
-      margin: 0;
-      padding: 18px 20px;
-      font-size: 1rem;
-      border-bottom: 1px solid var(--border);
-    }
-    .table-scroll { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 640px; }
-    thead th {
-      text-align: right;
-      font-weight: 600;
-      color: var(--muted);
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
-    }
-    thead th:first-child, tbody td:first-child { text-align: left; }
-    tbody td { padding: 14px 16px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
-    tbody tr:last-child td { border-bottom: none; }
-    tbody tr:hover td { background: color-mix(in srgb, var(--ink) 3%, transparent); }
-    .cat { display: inline-flex; align-items: center; gap: 9px; font-weight: 600; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-    .num { font-variant-numeric: tabular-nums; }
-    .bar { height: 6px; border-radius: 4px; margin-top: 6px; min-width: 4px; }
-    .share { min-width: 120px; text-align: left; }
-    .share .num { display: block; font-size: 0.8rem; color: var(--muted); }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-    .badge.yes { background: rgba(22, 163, 74, 0.15); color: #16a34a; }
-    .badge.no { background: rgba(100, 116, 139, 0.15); color: var(--muted); }
-    tfoot td {
-      padding: 14px 16px;
-      text-align: right;
-      font-weight: 700;
-      border-top: 2px solid var(--border);
-      white-space: nowrap;
-    }
-    tfoot td:first-child { text-align: left; }
-
-    .empty { padding: 48px 20px; text-align: center; color: var(--muted); }
-    footer.report-foot { margin-top: 28px; text-align: center; color: var(--muted); font-size: 0.8rem; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header class="report-head">
-      <h1>Reporte de gastos por categoría</h1>
-      <p>Generado el <%= generatedLabel %></p>
-    </header>
+  <div
+    class="dash-pad"
+    style="min-height:100vh;background:radial-gradient(1200px 600px at 15% -5%, rgba(52,211,153,0.10), transparent 55%),radial-gradient(1000px 600px at 95% 0%, rgba(168,85,247,0.10), transparent 50%),#070b16"
+  >
+    <div style="max-width:1320px;margin:0 auto">
 
-    <% if (categories.length === 0) { %>
-      <div class="panel"><div class="empty">No hay líneas clasificadas para reportar todavía.</div></div>
-    <% } else { %>
-      <section class="cards">
-        <div class="card">
-          <div class="k">Gasto total</div>
-          <div class="v num"><%= money(totals.total) %></div>
-          <div class="sub"><%= totals.lineCount %> líneas · <%= categories.length %> categorías</div>
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:34px">
+        <div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#34d399,#0f9d6b);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(52,211,153,0.35)">
+              <div style="width:14px;height:14px;border-radius:4px;background:#04120c"></div>
+            </div>
+            <span class="mono" style="font-size:12px;letter-spacing:2.5px;color:#7c879b;text-transform:uppercase">Pony · Clasificación de gastos</span>
+          </div>
+          <h1 class="dash-h1" style="margin:0;font-weight:800;letter-spacing:-1px;color:#f1f5f9;line-height:1.02">Reporte de gastos por categoría</h1>
+          <p style="margin:12px 0 0;font-size:15px;color:#7c879b">Generado el <%= generatedLabel %></p>
         </div>
-        <div class="card accent">
-          <div class="k">Base deducible</div>
-          <div class="v num"><%= money(totals.deductible) %></div>
-          <div class="sub"><%= pct(totals.deductible, totals.base).toFixed(1) %>% de la base imponible</div>
+        <div style="display:flex;gap:10px">
+          <div class="mono" style="font-size:12px;color:#9aa5ba;border:1px solid rgba(255,255,255,0.10);background:rgba(255,255,255,0.03);padding:11px 16px;border-radius:10px"><%= totals.lineCount %> líneas · <%= categories.length %> categorías</div>
         </div>
-        <div class="card">
-          <div class="k">Base imponible</div>
-          <div class="v num"><%= money(totals.base) %></div>
-          <div class="sub">Sin IVA</div>
-        </div>
-        <div class="card">
-          <div class="k">IVA</div>
-          <div class="v num"><%= money(totals.vat) %></div>
-          <div class="sub">Impuesto acumulado</div>
-        </div>
-      </section>
+      </div>
 
-      <section class="panel">
-        <h2>Detalle por categoría</h2>
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Categoría</th>
-                <th>Líneas</th>
-                <th>Base</th>
-                <th>IVA</th>
-                <th>Total</th>
-                <th>Deducible</th>
-                <th class="share">% del total</th>
-              </tr>
-            </thead>
-            <tbody>
-              <% categories.forEach((row) => { const share = pct(row.total, totals.total); %>
-                <tr>
-                  <td>
-                    <span class="cat">
-                      <span class="dot" style="background: <%= color(row.category) %>"></span>
-                      <%= label(row.category) %>
-                    </span>
-                  </td>
-                  <td class="num"><%= row.lineCount %></td>
-                  <td class="num"><%= money(row.base) %></td>
-                  <td class="num"><%= money(row.vat) %></td>
-                  <td class="num"><%= money(row.total) %></td>
-                  <td class="num">
-                    <% if (row.deductible > 0) { %>
-                      <span class="badge yes"><%= money(row.deductible) %></span>
-                    <% } else { %>
-                      <span class="badge no">—</span>
-                    <% } %>
-                  </td>
-                  <td class="share">
-                    <span class="num"><%= share.toFixed(1) %>%</span>
-                    <div class="bar" style="width: <%= Math.max(share, 2).toFixed(1) %>%; background: <%= color(row.category) %>"></div>
-                  </td>
-                </tr>
-              <% }) %>
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>Total</td>
-                <td class="num"><%= totals.lineCount %></td>
-                <td class="num"><%= money(totals.base) %></td>
-                <td class="num"><%= money(totals.vat) %></td>
-                <td class="num"><%= money(totals.total) %></td>
-                <td class="num"><%= money(totals.deductible) %></td>
-                <td class="share"><span class="num">100%</span></td>
-              </tr>
-            </tfoot>
-          </table>
+      <% if (categories.length === 0) { %>
+        <div style="background:linear-gradient(160deg,rgba(23,31,52,0.9),rgba(13,19,36,0.9));border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:60px 24px;text-align:center;color:#7c879b">
+          No hay líneas clasificadas para reportar todavía.
         </div>
-      </section>
-    <% } %>
+      <% } else { %>
 
-    <footer class="report-foot">Pony · Reporte de clasificación de gastos</footer>
+      <!-- KPI row -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-bottom:20px">
+        <%
+          const kpis = [
+            { label: 'Gasto total', value: money(totals.total), sub: totals.lineCount + ' líneas · ' + categories.length + ' categorías', valueColor: '#f1f5f9', bar: 'linear-gradient(90deg,#60a5fa,#3b82f6)', chip: '100%', chipColor: '#93c5fd', chipBg: 'rgba(96,165,250,0.14)' },
+            { label: 'Base deducible', value: money(totals.deductible), sub: pctLabel(totals.deductible, totals.base) + ' de la base imponible', valueColor: '#34d399', bar: 'linear-gradient(90deg,#34d399,#22c55e)', chip: pctLabel(totals.deductible, totals.base), chipColor: '#34d399', chipBg: 'rgba(52,211,153,0.14)' },
+            { label: 'Base imponible', value: money(totals.base), sub: 'Sin IVA', valueColor: '#f1f5f9', bar: 'linear-gradient(90deg,#a855f7,#7c3aed)', chip: pctLabel(totals.base, totals.total), chipColor: '#c4b5fd', chipBg: 'rgba(168,85,247,0.14)' },
+            { label: 'IVA', value: money(totals.vat), sub: 'Impuesto acumulado', valueColor: '#f1f5f9', bar: 'linear-gradient(90deg,#fbbf24,#f59e0b)', chip: pctLabel(totals.vat, totals.total), chipColor: '#fcd34d', chipBg: 'rgba(251,191,36,0.14)' },
+          ]
+        %>
+        <% kpis.forEach((k) => { %>
+          <div style="position:relative;background:linear-gradient(160deg,rgba(23,31,52,0.95),rgba(13,19,36,0.95));border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:22px 22px 20px;overflow:hidden;animation:floatIn .5s ease both">
+            <div style="position:absolute;top:0;left:0;right:0;height:3px;background:<%= k.bar %>"></div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <span class="mono" style="font-size:11px;letter-spacing:1.5px;color:#7c879b;text-transform:uppercase"><%= k.label %></span>
+              <span style="font-size:11px;font-weight:600;color:<%= k.chipColor %>;background:<%= k.chipBg %>;padding:3px 9px;border-radius:20px"><%= k.chip %></span>
+            </div>
+            <div style="font-size:34px;font-weight:800;letter-spacing:-0.8px;color:<%= k.valueColor %>;margin:14px 0 6px"><%= k.value %></div>
+            <div style="font-size:13px;color:#7c879b"><%= k.sub %></div>
+          </div>
+        <% }) %>
+      </div>
+
+      <!-- Charts grid -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px;margin-bottom:20px">
+
+        <div style="background:linear-gradient(160deg,rgba(23,31,52,0.9),rgba(13,19,36,0.9));border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <h3 style="margin:0;font-size:17px;font-weight:700;color:#f1f5f9">Distribución del gasto</h3>
+            <span class="mono" style="font-size:11px;color:#7c879b">por total</span>
+          </div>
+          <p style="margin:0 0 8px;font-size:13px;color:#7c879b">Peso de cada categoría sobre el gasto total</p>
+          <div style="position:relative;height:280px"><canvas id="chartDonut"></canvas></div>
+        </div>
+
+        <div style="background:linear-gradient(160deg,rgba(23,31,52,0.9),rgba(13,19,36,0.9));border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <h3 style="margin:0;font-size:17px;font-weight:700;color:#f1f5f9">Base imponible vs IVA</h3>
+            <span class="mono" style="font-size:11px;color:#7c879b">por categoría</span>
+          </div>
+          <p style="margin:0 0 8px;font-size:13px;color:#7c879b">Composición fiscal de cada categoría</p>
+          <div style="position:relative;height:280px"><canvas id="chartBars"></canvas></div>
+        </div>
+
+        <div style="background:linear-gradient(160deg,rgba(23,31,52,0.9),rgba(13,19,36,0.9));border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px">
+          <h3 style="margin:0 0 6px;font-size:17px;font-weight:700;color:#f1f5f9">Composición del total</h3>
+          <p style="margin:0 0 16px;font-size:13px;color:#7c879b">Del importe neto al total facturado</p>
+          <div style="position:relative;height:120px"><canvas id="chartStack"></canvas></div>
+          <div style="display:flex;gap:22px;margin-top:14px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="width:11px;height:11px;border-radius:3px;background:#a855f7"></span>
+              <span style="font-size:13px;color:#9aa5ba">Base imponible</span>
+              <span style="font-size:13px;font-weight:700;color:#f1f5f9"><%= money(totals.base) %></span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="width:11px;height:11px;border-radius:3px;background:#fbbf24"></span>
+              <span style="font-size:13px;color:#9aa5ba">IVA</span>
+              <span style="font-size:13px;font-weight:700;color:#f1f5f9"><%= money(totals.vat) %></span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:linear-gradient(160deg,rgba(23,31,52,0.9),rgba(13,19,36,0.9));border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px;display:flex;flex-direction:column">
+          <h3 style="margin:0 0 6px;font-size:17px;font-weight:700;color:#f1f5f9">Base deducible</h3>
+          <p style="margin:0 0 4px;font-size:13px;color:#7c879b">Proporción deducible sobre la base imponible</p>
+          <div style="display:flex;align-items:center;gap:24px;flex:1">
+            <div style="position:relative;width:180px;height:180px;flex:none"><canvas id="chartGauge"></canvas>
+              <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                <span style="font-size:30px;font-weight:800;color:#34d399"><%= pctLabel(totals.deductible, totals.base) %></span>
+                <span class="mono" style="font-size:11px;color:#7c879b">deducible</span>
+              </div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:14px">
+              <div>
+                <div style="font-size:13px;color:#7c879b;margin-bottom:2px">Importe deducible</div>
+                <div style="font-size:22px;font-weight:700;color:#34d399"><%= money(totals.deductible) %></div>
+              </div>
+              <div>
+                <div style="font-size:13px;color:#7c879b;margin-bottom:2px">Base imponible total</div>
+                <div style="font-size:22px;font-weight:700;color:#f1f5f9"><%= money(totals.base) %></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detail table -->
+      <div style="background:linear-gradient(160deg,rgba(23,31,52,0.9),rgba(13,19,36,0.9));border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:26px 28px">
+        <h3 style="margin:0 0 18px;font-size:18px;font-weight:700;color:#f1f5f9">Detalle por categoría</h3>
+        <div class="tbl-scroll"><div>
+          <div style="display:grid;grid-template-columns:1.6fr .7fr 1fr 1fr 1fr 1fr 1.4fr;gap:8px;padding:0 4px 14px;border-bottom:1px solid rgba(255,255,255,0.07)">
+            <span class="mono" style="font-size:11px;letter-spacing:1px;color:#6c778c;text-transform:uppercase">Categoría</span>
+            <span class="mono" style="font-size:11px;letter-spacing:1px;color:#6c778c;text-transform:uppercase;text-align:right">Líneas</span>
+            <span class="mono" style="font-size:11px;letter-spacing:1px;color:#6c778c;text-transform:uppercase;text-align:right">Base</span>
+            <span class="mono" style="font-size:11px;letter-spacing:1px;color:#6c778c;text-transform:uppercase;text-align:right">IVA</span>
+            <span class="mono" style="font-size:11px;letter-spacing:1px;color:#6c778c;text-transform:uppercase;text-align:right">Total</span>
+            <span class="mono" style="font-size:11px;letter-spacing:1px;color:#6c778c;text-transform:uppercase;text-align:right">Deducible</span>
+            <span class="mono" style="font-size:11px;letter-spacing:1px;color:#6c778c;text-transform:uppercase">% del total</span>
+          </div>
+          <% categories.forEach((r) => { const share = pct(r.total, totals.total); %>
+            <div style="display:grid;grid-template-columns:1.6fr .7fr 1fr 1fr 1fr 1fr 1.4fr;gap:8px;align-items:center;padding:16px 4px;border-bottom:1px solid rgba(255,255,255,0.05)">
+              <div style="display:flex;align-items:center;gap:11px">
+                <span style="width:11px;height:11px;border-radius:50%;background:<%= color(r.category) %>;box-shadow:0 0 10px <%= glow(r.category) %>"></span>
+                <span style="font-size:15px;font-weight:600;color:#f1f5f9"><%= label(r.category) %></span>
+              </div>
+              <span style="font-size:15px;color:#c3cad8;text-align:right"><%= r.lineCount %></span>
+              <span style="font-size:15px;color:#c3cad8;text-align:right"><%= money(r.base) %></span>
+              <span style="font-size:15px;color:#c3cad8;text-align:right"><%= money(r.vat) %></span>
+              <span style="font-size:15px;color:#f1f5f9;font-weight:600;text-align:right"><%= money(r.total) %></span>
+              <div style="text-align:right">
+                <% if (r.deductible > 0) { %>
+                  <span style="font-size:13px;font-weight:600;color:#34d399;background:rgba(52,211,153,0.14);padding:4px 11px;border-radius:20px"><%= money(r.deductible) %></span>
+                <% } else { %>
+                  <span style="font-size:16px;color:#556072">—</span>
+                <% } %>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                  <span style="font-size:14px;font-weight:600;color:#c3cad8"><%= share.toFixed(1).replace('.', ',') %>%</span>
+                </div>
+                <div style="height:6px;border-radius:4px;background:rgba(255,255,255,0.07);overflow:hidden">
+                  <div style="height:100%;width:<%= Math.max(share, 2).toFixed(1) %>%;background:<%= color(r.category) %>;border-radius:4px"></div>
+                </div>
+              </div>
+            </div>
+          <% }) %>
+          <div style="display:grid;grid-template-columns:1.6fr .7fr 1fr 1fr 1fr 1fr 1.4fr;gap:8px;align-items:center;padding:18px 4px 4px">
+            <span style="font-size:15px;font-weight:700;color:#f1f5f9">Total</span>
+            <span style="font-size:15px;font-weight:700;color:#f1f5f9;text-align:right"><%= totals.lineCount %></span>
+            <span style="font-size:15px;font-weight:700;color:#f1f5f9;text-align:right"><%= money(totals.base) %></span>
+            <span style="font-size:15px;font-weight:700;color:#f1f5f9;text-align:right"><%= money(totals.vat) %></span>
+            <span style="font-size:15px;font-weight:700;color:#f1f5f9;text-align:right"><%= money(totals.total) %></span>
+            <span style="font-size:15px;font-weight:700;color:#34d399;text-align:right"><%= money(totals.deductible) %></span>
+            <span style="font-size:15px;font-weight:700;color:#7c879b">100%</span>
+          </div>
+        </div></div>
+      </div>
+      <% } %>
+
+      <p class="mono" style="text-align:center;margin:26px 0 0;font-size:13px;color:#5a6478">Pony · Reporte de clasificación de gastos</p>
+    </div>
   </div>
+
+  <% if (categories.length > 0) { %>
+  <script>
+    const CHART = <%- JSON.stringify(chart) %>;
+
+    (function initCharts(tries) {
+      if (typeof window.Chart === 'undefined') {
+        if (tries > 60) return;
+        return setTimeout(function () { initCharts(tries + 1); }, 100);
+      }
+      const C = window.Chart;
+      C.defaults.font.family = "'Sora', system-ui, sans-serif";
+      C.defaults.color = '#9aa5ba';
+      const money = function (n) {
+        const p = (Math.round((n || 0) * 100) / 100).toFixed(2).split('.');
+        return '$' + p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + p[1];
+      };
+
+      new C(document.getElementById('chartDonut'), {
+        type: 'doughnut',
+        data: {
+          labels: CHART.labels,
+          datasets: [{ data: CHART.total, backgroundColor: CHART.colors, borderColor: '#0d1324', borderWidth: 3, hoverOffset: 6 }],
+        },
+        options: {
+          cutout: '68%', responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { padding: 18, usePointStyle: true, pointStyle: 'circle', boxWidth: 8, font: { size: 13 } } },
+            tooltip: { callbacks: { label: function (c) { return ' ' + c.label + ': ' + money(c.parsed); } } },
+          },
+        },
+      });
+
+      new C(document.getElementById('chartBars'), {
+        type: 'bar',
+        data: {
+          labels: CHART.labels,
+          datasets: [
+            { label: 'Base imponible', data: CHART.base, backgroundColor: '#a855f7', borderRadius: 6, maxBarThickness: 54 },
+            { label: 'IVA', data: CHART.vat, backgroundColor: '#fbbf24', borderRadius: 6, maxBarThickness: 54 },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 12 } } },
+            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { callback: function (v) { return '$' + (v >= 1000 ? (v / 1000) + 'k' : v); } } },
+          },
+          plugins: {
+            legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'rectRounded', boxWidth: 10, font: { size: 12 } } },
+            tooltip: { callbacks: { label: function (c) { return ' ' + c.dataset.label + ': ' + money(c.parsed.y); } } },
+          },
+        },
+      });
+
+      new C(document.getElementById('chartStack'), {
+        type: 'bar',
+        data: {
+          labels: ['Total'],
+          datasets: [
+            { label: 'Base imponible', data: [CHART.totalsBase], backgroundColor: '#a855f7', borderRadius: { topLeft: 8, bottomLeft: 8 } },
+            { label: 'IVA', data: [CHART.totalsVat], backgroundColor: '#fbbf24', borderRadius: { topRight: 8, bottomRight: 8 } },
+          ],
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          scales: { x: { stacked: true, display: false, max: CHART.grandTotal }, y: { stacked: true, display: false } },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function (c) { return ' ' + c.dataset.label + ': ' + money(c.parsed.x); } } },
+          },
+        },
+      });
+
+      new C(document.getElementById('chartGauge'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Deducible', 'No deducible'],
+          datasets: [{ data: [CHART.dedPct, Math.max(100 - CHART.dedPct, 0)], backgroundColor: ['#34d399', 'rgba(255,255,255,0.06)'], borderWidth: 0, circumference: 270, rotation: 225 }],
+        },
+        options: { cutout: '76%', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } } },
+      });
+    })(0);
+  </script>
+  <% } %>
 </body>
 </html>
