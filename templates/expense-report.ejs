@@ -23,6 +23,7 @@
 
   // Bright-on-dark palette; stable per rubro.
   const COLORS = {
+    // Rubros deducibles (SRI)
     VIVIENDA: '#60a5fa',
     SALUD: '#f87171',
     EDUCACION: '#a855f7',
@@ -30,7 +31,19 @@
     VESTIMENTA: '#f472b6',
     TURISMO: '#22d3ee',
     NEGOCIO: '#fb923c',
-    NO_DEDUCIBLE: '#64748b',
+    // Rubros no deducibles
+    ENTRETENIMIENTO: '#e879f9',
+    VICIOS_Y_LUJOS: '#f43f5e',
+    MULTAS_Y_SANCIONES: '#ef4444',
+    SERVICIOS_FINANCIEROS: '#fbbf24',
+    MASCOTAS: '#a3e635',
+    DONACIONES_NO_CALIFICADAS: '#2dd4bf',
+    GASTOS_EXTERIOR: '#38bdf8',
+    TECNOLOGIA_PERSONAL: '#818cf8',
+    TRANSPORTE_PERSONAL: '#fdba74',
+    CUIDADO_PERSONAL: '#fda4af',
+    APUESTAS_Y_JUEGOS: '#facc15',
+    OTROS_NO_DEDUCIBLE: '#64748b',
   }
   const LABELS = {
     VIVIENDA: 'Vivienda',
@@ -40,7 +53,18 @@
     VESTIMENTA: 'Vestimenta',
     TURISMO: 'Turismo',
     NEGOCIO: 'Negocio',
-    NO_DEDUCIBLE: 'No deducible',
+    ENTRETENIMIENTO: 'Entretenimiento y ocio',
+    VICIOS_Y_LUJOS: 'Vicios y lujos',
+    MULTAS_Y_SANCIONES: 'Multas y sanciones',
+    SERVICIOS_FINANCIEROS: 'Servicios financieros',
+    MASCOTAS: 'Mascotas',
+    DONACIONES_NO_CALIFICADAS: 'Donaciones no calificadas',
+    GASTOS_EXTERIOR: 'Gastos en el exterior',
+    TECNOLOGIA_PERSONAL: 'Tecnología personal',
+    TRANSPORTE_PERSONAL: 'Transporte personal',
+    CUIDADO_PERSONAL: 'Belleza y cuidado personal',
+    APUESTAS_Y_JUEGOS: 'Apuestas y juegos de azar',
+    OTROS_NO_DEDUCIBLE: 'Otros no deducibles',
   }
   const color = (c) => COLORS[c] || '#64748b'
   const label = (c) => LABELS[c] || c
@@ -54,6 +78,24 @@
 
   const dedPct = pct(totals.deductible, totals.base)
 
+  // Two blocks: the SRI rubros and the breakdown of what is NOT deductible.
+  const deductibleRows = categories.filter((r) => r.deductibleCategory === 1)
+  const nonDeductibleRows = categories.filter((r) => r.deductibleCategory === 0)
+  const subtotal = (rows) =>
+    rows.reduce(
+      (acc, r) => ({
+        lineCount: acc.lineCount + r.lineCount,
+        base: acc.base + r.base,
+        vat: acc.vat + r.vat,
+        total: acc.total + r.total,
+        deductible: acc.deductible + r.deductible,
+        nonDeductible: acc.nonDeductible + r.nonDeductible,
+      }),
+      { lineCount: 0, base: 0, vat: 0, total: 0, deductible: 0, nonDeductible: 0 },
+    )
+  const deductibleTotals = subtotal(deductibleRows)
+  const nonDeductibleTotals = subtotal(nonDeductibleRows)
+
   // Data handed to Chart.js as one JSON blob.
   const chart = {
     labels: categories.map((r) => label(r.category)),
@@ -65,6 +107,10 @@
     totalsVat: totals.vat,
     grandTotal: totals.total,
     dedPct: Number(dedPct.toFixed(2)),
+    // Breakdown of the non-deductible spend, largest first.
+    ndLabels: nonDeductibleRows.map((r) => label(r.category)),
+    ndColors: nonDeductibleRows.map((r) => color(r.category)),
+    ndTotal: nonDeductibleRows.map((r) => r.total),
   }
 %>
 <!DOCTYPE html>
@@ -138,6 +184,7 @@
           const kpis = [
             { label: 'Gasto total', value: money(totals.total), sub: totals.lineCount + ' líneas · ' + categories.length + ' categorías', valueColor: '#f1f5f9', bar: 'linear-gradient(90deg,#60a5fa,#3b82f6)', chip: '100%', chipColor: '#93c5fd', chipBg: 'rgba(96,165,250,0.14)' },
             { label: 'Base deducible', value: money(totals.deductible), sub: pctLabel(totals.deductible, totals.base) + ' de la base imponible', valueColor: '#34d399', bar: 'linear-gradient(90deg,#34d399,#22c55e)', chip: pctLabel(totals.deductible, totals.base), chipColor: '#34d399', chipBg: 'rgba(52,211,153,0.14)' },
+            { label: 'Base no deducible', value: money(totals.nonDeductible), sub: nonDeductibleRows.length + ' rubros no deducibles', valueColor: '#f87171', bar: 'linear-gradient(90deg,#f87171,#ef4444)', chip: pctLabel(totals.nonDeductible, totals.base), chipColor: '#fca5a5', chipBg: 'rgba(248,113,113,0.14)' },
             { label: 'Base imponible', value: money(totals.base), sub: 'Sin IVA', valueColor: '#f1f5f9', bar: 'linear-gradient(90deg,#a855f7,#7c3aed)', chip: pctLabel(totals.base, totals.total), chipColor: '#c4b5fd', chipBg: 'rgba(168,85,247,0.14)' },
             { label: 'IVA', value: money(totals.vat), sub: 'Impuesto acumulado', valueColor: '#f1f5f9', bar: 'linear-gradient(90deg,#fbbf24,#f59e0b)', chip: pctLabel(totals.vat, totals.total), chipColor: '#fcd34d', chipBg: 'rgba(251,191,36,0.14)' },
           ]
@@ -174,6 +221,19 @@
           </div>
           <p style="margin:0 0 8px;font-size:13px;color:#7c879b">Composición fiscal de cada categoría</p>
           <div style="position:relative;height:280px"><canvas id="chartBars"></canvas></div>
+        </div>
+
+        <div style="background:linear-gradient(160deg,rgba(23,31,52,0.9),rgba(13,19,36,0.9));border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <h3 style="margin:0;font-size:17px;font-weight:700;color:#f1f5f9">En qué se va lo no deducible</h3>
+            <span class="mono" style="font-size:11px;color:#7c879b"><%= money(nonDeductibleTotals.total) %></span>
+          </div>
+          <p style="margin:0 0 8px;font-size:13px;color:#7c879b">Desglose del gasto que no entra en la declaración</p>
+          <% if (nonDeductibleRows.length === 0) { %>
+            <div style="height:280px;display:flex;align-items:center;justify-content:center;color:#556072;font-size:14px">Sin gasto no deducible registrado.</div>
+          <% } else { %>
+            <div style="position:relative;height:280px"><canvas id="chartNonDeductible"></canvas></div>
+          <% } %>
         </div>
 
         <div style="background:linear-gradient(160deg,rgba(23,31,52,0.9),rgba(13,19,36,0.9));border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px">
@@ -231,31 +291,55 @@
             <span class="mono" style="font-size:11px;letter-spacing:1px;color:#6c778c;text-transform:uppercase;text-align:right">Deducible</span>
             <span class="mono" style="font-size:11px;letter-spacing:1px;color:#6c778c;text-transform:uppercase">% del total</span>
           </div>
-          <% categories.forEach((r) => { const share = pct(r.total, totals.total); %>
-            <div style="display:grid;grid-template-columns:1.6fr .7fr 1fr 1fr 1fr 1fr 1.4fr;gap:8px;align-items:center;padding:16px 4px;border-bottom:1px solid rgba(255,255,255,0.05)">
-              <div style="display:flex;align-items:center;gap:11px">
-                <span style="width:11px;height:11px;border-radius:50%;background:<%= color(r.category) %>;box-shadow:0 0 10px <%= glow(r.category) %>"></span>
-                <span style="font-size:15px;font-weight:600;color:#f1f5f9"><%= label(r.category) %></span>
-              </div>
-              <span style="font-size:15px;color:#c3cad8;text-align:right"><%= r.lineCount %></span>
-              <span style="font-size:15px;color:#c3cad8;text-align:right"><%= money(r.base) %></span>
-              <span style="font-size:15px;color:#c3cad8;text-align:right"><%= money(r.vat) %></span>
-              <span style="font-size:15px;color:#f1f5f9;font-weight:600;text-align:right"><%= money(r.total) %></span>
-              <div style="text-align:right">
-                <% if (r.deductible > 0) { %>
-                  <span style="font-size:13px;font-weight:600;color:#34d399;background:rgba(52,211,153,0.14);padding:4px 11px;border-radius:20px"><%= money(r.deductible) %></span>
-                <% } else { %>
-                  <span style="font-size:16px;color:#556072">—</span>
-                <% } %>
-              </div>
-              <div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                  <span style="font-size:14px;font-weight:600;color:#c3cad8"><%= share.toFixed(1).replace('.', ',') %>%</span>
+          <%
+            // Un bloque por grupo: primero los rubros del SRI, luego el detalle
+            // de lo no deducible, cada uno con su subtotal.
+            const blocks = [
+              { title: 'Rubros deducibles (SRI)', accent: '#34d399', rows: deductibleRows, sub: deductibleTotals },
+              { title: 'Rubros no deducibles', accent: '#f87171', rows: nonDeductibleRows, sub: nonDeductibleTotals },
+            ]
+          %>
+          <% blocks.forEach((block) => { if (block.rows.length === 0) return; %>
+            <div style="display:flex;align-items:center;gap:10px;padding:20px 4px 10px">
+              <span style="width:7px;height:7px;border-radius:50%;background:<%= block.accent %>"></span>
+              <span class="mono" style="font-size:11px;letter-spacing:1.4px;color:<%= block.accent %>;text-transform:uppercase"><%= block.title %></span>
+              <span class="mono" style="font-size:11px;color:#556072"><%= block.rows.length %> · <%= pctLabel(block.sub.total, totals.total) %> del total</span>
+            </div>
+            <% block.rows.forEach((r) => { const share = pct(r.total, totals.total); %>
+              <div style="display:grid;grid-template-columns:1.6fr .7fr 1fr 1fr 1fr 1fr 1.4fr;gap:8px;align-items:center;padding:16px 4px;border-bottom:1px solid rgba(255,255,255,0.05)">
+                <div style="display:flex;align-items:center;gap:11px">
+                  <span style="width:11px;height:11px;border-radius:50%;background:<%= color(r.category) %>;box-shadow:0 0 10px <%= glow(r.category) %>"></span>
+                  <span style="font-size:15px;font-weight:600;color:#f1f5f9"><%= label(r.category) %></span>
                 </div>
-                <div style="height:6px;border-radius:4px;background:rgba(255,255,255,0.07);overflow:hidden">
-                  <div style="height:100%;width:<%= Math.max(share, 2).toFixed(1) %>%;background:<%= color(r.category) %>;border-radius:4px"></div>
+                <span style="font-size:15px;color:#c3cad8;text-align:right"><%= r.lineCount %></span>
+                <span style="font-size:15px;color:#c3cad8;text-align:right"><%= money(r.base) %></span>
+                <span style="font-size:15px;color:#c3cad8;text-align:right"><%= money(r.vat) %></span>
+                <span style="font-size:15px;color:#f1f5f9;font-weight:600;text-align:right"><%= money(r.total) %></span>
+                <div style="text-align:right">
+                  <% if (r.deductible > 0) { %>
+                    <span style="font-size:13px;font-weight:600;color:#34d399;background:rgba(52,211,153,0.14);padding:4px 11px;border-radius:20px"><%= money(r.deductible) %></span>
+                  <% } else { %>
+                    <span style="font-size:12px;font-weight:600;color:#9aa5ba;background:rgba(255,255,255,0.05);padding:4px 11px;border-radius:20px">No deducible</span>
+                  <% } %>
+                </div>
+                <div>
+                  <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                    <span style="font-size:14px;font-weight:600;color:#c3cad8"><%= share.toFixed(1).replace('.', ',') %>%</span>
+                  </div>
+                  <div style="height:6px;border-radius:4px;background:rgba(255,255,255,0.07);overflow:hidden">
+                    <div style="height:100%;width:<%= Math.max(share, 2).toFixed(1) %>%;background:<%= color(r.category) %>;border-radius:4px"></div>
+                  </div>
                 </div>
               </div>
+            <% }) %>
+            <div style="display:grid;grid-template-columns:1.6fr .7fr 1fr 1fr 1fr 1fr 1.4fr;gap:8px;align-items:center;padding:12px 4px;border-bottom:1px solid rgba(255,255,255,0.05)">
+              <span style="font-size:13px;font-weight:600;color:<%= block.accent %>">Subtotal</span>
+              <span style="font-size:13px;font-weight:600;color:#9aa5ba;text-align:right"><%= block.sub.lineCount %></span>
+              <span style="font-size:13px;font-weight:600;color:#9aa5ba;text-align:right"><%= money(block.sub.base) %></span>
+              <span style="font-size:13px;font-weight:600;color:#9aa5ba;text-align:right"><%= money(block.sub.vat) %></span>
+              <span style="font-size:13px;font-weight:600;color:<%= block.accent %>;text-align:right"><%= money(block.sub.total) %></span>
+              <span style="font-size:13px;font-weight:600;color:#9aa5ba;text-align:right"><%= block.sub.deductible > 0 ? money(block.sub.deductible) : '—' %></span>
+              <span style="font-size:13px;font-weight:600;color:#7c879b"><%= pctLabel(block.sub.total, totals.total) %></span>
             </div>
           <% }) %>
           <div style="display:grid;grid-template-columns:1.6fr .7fr 1fr 1fr 1fr 1fr 1.4fr;gap:8px;align-items:center;padding:18px 4px 4px">
@@ -328,6 +412,27 @@
           },
         },
       });
+
+      if (CHART.ndLabels.length > 0) {
+        new C(document.getElementById('chartNonDeductible'), {
+          type: 'bar',
+          data: {
+            labels: CHART.ndLabels,
+            datasets: [{ label: 'No deducible', data: CHART.ndTotal, backgroundColor: CHART.ndColors, borderRadius: 6, maxBarThickness: 22 }],
+          },
+          options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            scales: {
+              x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { callback: function (v) { return '$' + (v >= 1000 ? (v / 1000) + 'k' : v); } } },
+              y: { grid: { display: false }, ticks: { font: { size: 12 } } },
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: { callbacks: { label: function (c) { return ' ' + money(c.parsed.x); } } },
+            },
+          },
+        });
+      }
 
       new C(document.getElementById('chartStack'), {
         type: 'bar',

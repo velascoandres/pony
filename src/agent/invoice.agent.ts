@@ -37,7 +37,7 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
           subtotal: item.subtotal,
           reason:
             item.warning ??
-            `Confidence ${item.confidence} < ${CONFIDENCE_THRESHOLD} (suggested category: ${item.taxCategory})`,
+            `Confidence ${item.confidence} < ${CONFIDENCE_THRESHOLD} (suggested category: ${item.taxCategory}, ${item.isDeductible ? 'deducible' : 'no deducible'})`,
           rationale: item.rationale,
         }))
 

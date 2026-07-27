@@ -7,17 +7,63 @@
 ## Purpose
 
 Pony is an AI agent that reads Ecuadorian electronic invoices (`file` in XML) and
-classifies each line item into the personal-expense tax category defined by the SRI
-(_Servicio de Rentas Internas_): `VIVIENDA`, `SALUD`, `EDUCACION`, `ALIMENTACION`,
-`VESTIMENTA`, `TURISMO`, `NEGOCIO` or `NO_DEDUCIBLE`.
+classifies each line item into an expense category, recording separately whether that
+line is deductible.
 
 For every line the agent assigns:
 
-- a **`taxCategory`** — one of the eight categories above,
+- a **`taxCategory`** — the rubro of the expense (see [the catalogue](#expense-categories)),
+- an **`isDeductible`** flag — whether the line counts towards the declaration,
 - a **`confidence`** score between 0 and 1,
 - a **`rationale`** — a one-sentence justification written _before_ deciding the category
   (it names the real good/service, ignores brand names, and reconstructs truncated text
   such as `MEMBRES-A` → `MEMBRESÍA`).
+
+## Expense categories
+
+The category says **what** was bought; `isDeductible` says whether it can be deducted.
+They are independent on purpose: a non-deductible expense still gets a specific rubro, so
+the report can explain _what_ the non-deductible money went on instead of dumping it all
+into one bucket.
+
+**Deductible rubros (SRI).** Only these may carry `isDeductible = 1` — the DB enforces it
+with a `CHECK` constraint, and `InvoiceService` re-applies the same rule before writing.
+
+| Category       | Covers                                                       |
+| -------------- | ------------------------------------------------------------ |
+| `VIVIENDA`     | Rent, household utilities, mortgage interest                  |
+| `SALUD`        | Medicines, medical fees, health insurance, glasses            |
+| `EDUCACION`    | Tuition, school supplies, uniforms, courses                   |
+| `ALIMENTACION` | Food and non-alcoholic beverages                              |
+| `VESTIMENTA`   | Clothing and footwear (not luxury accessories)                |
+| `TURISMO`      | Domestic lodging, tour packages, tourist transport            |
+| `NEGOCIO`      | Expenses tied to the taxpayer's economic activity             |
+
+A deductible rubro is not automatically deductible: the agent sets `isDeductible = false`
+when the expense does not really qualify (suspended issuer, `NEGOCIO` without a matching
+economic activity, etc.).
+
+**Non-deductible rubros.** Always stored with `isDeductible = 0`.
+
+| Category                    | Covers                                                            |
+| --------------------------- | ----------------------------------------------------------------- |
+| `ENTRETENIMIENTO`           | Cinema, concerts, streaming, video games, sporting events         |
+| `VICIOS_Y_LUJOS`            | Tobacco, alcohol, jewellery, luxury goods                         |
+| `MULTAS_Y_SANCIONES`        | Traffic fines, late-payment surcharges, administrative penalties  |
+| `SERVICIOS_FINANCIEROS`     | Credit-card interest on consumption, bank fees and commissions    |
+| `MASCOTAS`                  | Vet, pet food, pet accessories                                    |
+| `DONACIONES_NO_CALIFICADAS` | Donations to individuals or entities not recognised by the SRI    |
+| `GASTOS_EXTERIOR`           | Purchases abroad without Ecuadorian tax support                   |
+| `TECNOLOGIA_PERSONAL`       | Phones, computers, gadgets for personal use                       |
+| `TRANSPORTE_PERSONAL`       | Vehicle purchase, fuel, automotive maintenance                    |
+| `CUIDADO_PERSONAL`          | Hairdressing, cosmetics, spa, gym                                 |
+| `APUESTAS_Y_JUEGOS`         | Lotteries, casinos, sports betting                                |
+| `OTROS_NO_DEDUCIBLE`        | Non-deductible expense fitting none of the above (last resort)    |
+
+The catalogue lives in one place — `DEDUCTIBLE_CATEGORIES` / `NON_DEDUCTIBLE_CATEGORIES`
+in [src/schemas.ts](src/schemas.ts) — and feeds the tool JSON schema, the report query and
+the report template; [db/db-schemas.sql](db/db-schemas.sql) mirrors it in its `CHECK`
+constraints.
 
 Lines whose confidence falls below `CONFIDENCE_THRESHOLD` are routed to a **conflict
 report** for a human to review instead of being trusted blindly. Everything else is
@@ -31,7 +77,7 @@ flowchart TD
     B --> C[parse_invoice_tool<br/>extract header + line items]
     C --> D{Description ambiguous?<br/>brand / membership / code}
     D -- yes --> E[get_fiscal_invoice_tool<br/>look up issuer RUC in SRI]
-    D -- no --> F[Classify each line:<br/>write rationale, then<br/>taxCategory + confidence]
+    D -- no --> F[Classify each line:<br/>write rationale, then<br/>taxCategory + isDeductible + confidence]
     E --> F
     F --> G[save_invoice_info_tool<br/>persist invoice to SQLite]
     G --> H{confidence &lt; threshold?}
@@ -95,6 +141,11 @@ This runs [src/db/init.ts](src/db/init.ts), which applies
 
 > To start completely fresh, delete the database file (and its `-wal` / `-shm`
 > siblings) and run `pnpm init-db` again — the app also recreates the schema on startup.
+>
+> There is no migration tooling: the DDL uses `CREATE TABLE IF NOT EXISTS`, so an existing
+> database keeps its old `CHECK` constraints and will reject any category added to the
+> catalogue afterwards. After changing the categories, delete the database file and
+> re-initialize it.
 
 ## Run
 
@@ -120,7 +171,8 @@ On each run the agent writes three files to `reports/`, timestamped:
   when there is at least one conflicting line.
 - `summary-<timestamp>.json` — counts of classified vs. conflicting lines.
 - `report-<timestamp>.html` — a polished, responsive report of **expenses by category**
-  (base, IVA, total, deductible base and share of the total per rubro), rendered from the
+  (base, IVA, total, deductible base and share of the total per rubro), split into the
+  deductible rubros and the breakdown of the non-deductible spend, rendered from the
   `templates/expense-report.ejs` template. Always generated at the end of the run, even when
   there are no conflicts (it renders an empty-state message if nothing was classified yet).
 
@@ -142,10 +194,10 @@ invoice, the tables hold:
 
 **`invoice_lines`** (note `rationale` and `confidence` per line)
 
-| id | invoice_id | line_number | description        | quantity | unit_price | subtotal | tax_category | is_deductible | method | confidence | rationale                                                                     |
-| -- | ---------- | ----------- | ------------------ | -------- | ---------- | -------- | ------------ | ------------- | ------ | ---------- | ----------------------------------------------------------------------------- |
-| 1  | 1          | 1           | SAMPLE FOOD ITEM   | 2        | 1.00       | 2.00     | ALIMENTACION | 1             | LLM    | 0.97       | Basic non-alcoholic food item.                                                |
-| 2  | 1          | 2           | SAMPLE MEMBERSHIP  | 1        | 20.00      | 20.00    | NO_DEDUCIBLE | 0             | LLM    | 0.60       | A club/gym membership is a service, not clothing; brand names in the text are ignored. |
+| id | invoice_id | line_number | description        | quantity | unit_price | subtotal | tax_category     | is_deductible | method | confidence | rationale                                                                     |
+| -- | ---------- | ----------- | ------------------ | -------- | ---------- | -------- | ---------------- | ------------- | ------ | ---------- | ----------------------------------------------------------------------------- |
+| 1  | 1          | 1           | SAMPLE FOOD ITEM   | 2        | 1.00       | 2.00     | ALIMENTACION     | 1             | LLM    | 0.97       | Basic non-alcoholic food item.                                                |
+| 2  | 1          | 2           | SAMPLE MEMBERSHIP  | 1        | 20.00      | 20.00    | CUIDADO_PERSONAL | 0             | LLM    | 0.60       | A gym membership is a personal-care service, not clothing; brand names in the text are ignored. |
 
 ### `reports/summary-<timestamp>.json`
 
@@ -164,22 +216,28 @@ Only the lines that scored below `CONFIDENCE_THRESHOLD` land here, so a human ca
 
 ```csv
 invoiceNumber,description,quantity,unitPrice,subtotal,reason,rationale
-001-001-000000001,SAMPLE MEMBERSHIP,1,20.00,20.00,Confidence 0.6 < 0.85 (suggested category: NO_DEDUCIBLE),A club/gym membership is a service, not clothing; brand names in the text are ignored.
+001-001-000000001,SAMPLE MEMBERSHIP,1,20.00,20.00,Confidence 0.6 < 0.85 (suggested category: CUIDADO_PERSONAL, no deducible),A gym membership is a personal-care service, not clothing; brand names in the text are ignored.
 ```
 
 ### `reports/report-<timestamp>.html`
 
-A self-contained (inline CSS, light/dark aware) HTML report summarizing every classified,
-balanced line grouped by category. It opens with summary cards (total spend, deductible
-base, taxable base, IVA) and a per-category table:
+A self-contained (inline CSS, dark) HTML report summarizing every classified, balanced
+line grouped by category. It opens with summary cards (total spend, deductible base,
+non-deductible base, taxable base, IVA), charts — including a breakdown of _what_ the
+non-deductible spend went on — and a per-category table split into two blocks, each with
+its own subtotal:
 
-| Categoría    | Líneas | Base   | IVA   | Total  | Deducible | % del total |
-| ------------ | ------ | ------ | ----- | ------ | --------- | ----------- |
-| Alimentación | 1      | $2.00  | $0.30 | $2.30  | $2.00     | 8.4%        |
-| No deducible | 1      | $20.00 | $3.00 | $23.00 | —         | 91.6%       |
+| Categoría                  | Líneas | Base   | IVA   | Total  | Deducible     | % del total |
+| -------------------------- | ------ | ------ | ----- | ------ | ------------- | ----------- |
+| **Rubros deducibles (SRI)**|        |        |       |        |               |             |
+| Alimentación               | 1      | $2.00  | $0.30 | $2.30  | $2.00         | 8.4%        |
+| **Rubros no deducibles**   |        |        |       |        |               |             |
+| Belleza y cuidado personal | 1      | $20.00 | $3.00 | $23.00 | No deducible  | 91.6%       |
 
 The data comes from `InvoiceService.getExpenseReportByCategory()`, which aggregates
-`invoice_lines` (only classified lines on balanced invoices) by `tax_category`.
+`invoice_lines` (only classified lines on balanced invoices) by `tax_category`, returning
+the deductible and non-deductible base per rubro plus a flag marking which block the rubro
+belongs to.
 
 ## Useful scripts
 

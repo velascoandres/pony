@@ -20,9 +20,10 @@ const sumTotals = (categories: CategoryExpenseReport) =>
       vat: acc.vat + row.vat,
       total: acc.total + row.total,
       deductible: acc.deductible + row.deductible,
+      nonDeductible: acc.nonDeductible + row.nonDeductible,
       lineCount: acc.lineCount + row.lineCount,
     }),
-    { base: 0, vat: 0, total: 0, deductible: 0, lineCount: 0 },
+    { base: 0, vat: 0, total: 0, deductible: 0, nonDeductible: 0, lineCount: 0 },
   )
 
 export class SaveExpenseReportTool extends Effect.Service<SaveExpenseReportTool>()(

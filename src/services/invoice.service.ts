@@ -1,11 +1,26 @@
 import { Console, Effect, Schema } from 'effect'
 import { DbClient } from '../db/client.js'
 import { DatabaseError } from '../errors.js'
-import { CategoryExpenseReportSchema, InvoiceSchema } from '../schemas.js'
-import type { ClassifiedInvoice, TaxCategory } from '../types.js'
+import {
+  CategoryExpenseReportSchema,
+  DEDUCTIBLE_CATEGORIES,
+  InvoiceSchema,
+  isDeductibleCategory,
+} from '../schemas.js'
+import type { ClassifiedInvoice, ClassifiedInvoiceItem, TaxCategory } from '../types.js'
 
 // Header and total must reconcile within one cent to be considered balanced.
 const BALANCE_TOLERANCE = 0.01
+
+// The agent decides deductibility per line, but the catalogue has the last word:
+// a category that is not an SRI rubro can never be stored as deductible (the
+// same rule the CHECK constraint on invoice_lines enforces).
+const toDeductibleFlag = (item: ClassifiedInvoiceItem) =>
+  item.isDeductible && isDeductibleCategory(item.taxCategory) ? 1 : 0
+
+// Inlined into the report query so the SQL splits rubros exactly like the TS
+// catalogue does.
+const DEDUCTIBLE_CATEGORIES_SQL = DEDUCTIBLE_CATEGORIES.map((c) => `'${c}'`).join(', ')
 
 export class InvoiceService extends Effect.Service<InvoiceService>()('app/InvoiceService', {
   effect: Effect.gen(function* () {
@@ -80,7 +95,7 @@ export class InvoiceService extends Effect.Service<InvoiceService>()('app/Invoic
                   vatRate: item.vatRate,
                   vatAmount: item.vatAmount,
                   taxCategory: item.taxCategory,
-                  isDeductible: item.taxCategory === 'NO_DEDUCIBLE' ? 0 : 1,
+                  isDeductible: toDeductibleFlag(item),
                   confidence: item.confidence,
                   rationale: item.rationale,
                 },
@@ -171,27 +186,35 @@ export class InvoiceService extends Effect.Service<InvoiceService>()('app/Invoic
           // (is_balanced = 1) and already-classified lines (tax_category NOT
           // NULL — see idx_lines_pending) count towards the report. Rounding to
           // two decimals keeps the summed cents from drifting into float noise.
+          // `deductibleCategory` lets the report group the rubros into the SRI
+          // block and the non-deductible breakdown.
           const rows = yield* dbClient.query<{
             category: TaxCategory
+            deductibleCategory: 0 | 1
             lineCount: number
             base: number
             vat: number
             total: number
             deductible: number
+            nonDeductible: number
           }>(
             `SELECT l.tax_category                            AS category,
+                    CASE WHEN l.tax_category IN (${DEDUCTIBLE_CATEGORIES_SQL})
+                         THEN 1 ELSE 0 END                    AS deductibleCategory,
                     COUNT(*)                                  AS lineCount,
                     ROUND(SUM(l.subtotal), 2)                 AS base,
                     ROUND(SUM(l.vat_amount), 2)               AS vat,
                     ROUND(SUM(l.subtotal + l.vat_amount), 2)  AS total,
                     ROUND(SUM(CASE WHEN l.is_deductible = 1
-                                   THEN l.subtotal ELSE 0 END), 2) AS deductible
+                                   THEN l.subtotal ELSE 0 END), 2) AS deductible,
+                    ROUND(SUM(CASE WHEN l.is_deductible = 0
+                                   THEN l.subtotal ELSE 0 END), 2) AS nonDeductible
              FROM invoice_lines l
              JOIN invoices i ON i.id = l.invoice_id
              WHERE l.tax_category IS NOT NULL
                AND i.is_balanced = 1
              GROUP BY l.tax_category
-             ORDER BY total DESC`,
+             ORDER BY deductibleCategory DESC, total DESC`,
           )
 
           const report = yield* Schema.decodeUnknown(CategoryExpenseReportSchema)(rows).pipe(

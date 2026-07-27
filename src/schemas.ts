@@ -82,9 +82,10 @@ export const InvoiceSchema = Schema.Struct({
   total: Schema.Number,
 })
 
-// The expense categories the agent may assign — mirrors the CHECK constraint on
-// invoice_lines.tax_category.
-export const TaxCategorySchema = Schema.Literal(
+// The deductible expense rubros recognised by the SRI. Only these may carry
+// isDeductible = 1 — see `isDeductibleCategory` and the CHECK constraint on
+// invoice_lines.
+export const DEDUCTIBLE_CATEGORIES = [
   'VIVIENDA',
   'SALUD',
   'EDUCACION',
@@ -92,14 +93,46 @@ export const TaxCategorySchema = Schema.Literal(
   'VESTIMENTA',
   'TURISMO',
   'NEGOCIO',
-  'NO_DEDUCIBLE',
-)
+] as const
+
+// Non-deductible spending, broken down with the same granularity as the SRI
+// rubros so the report can say WHAT the non-deductible money went on instead of
+// lumping it into a single bucket. OTROS_NO_DEDUCIBLE is the catch-all.
+export const NON_DEDUCTIBLE_CATEGORIES = [
+  'ENTRETENIMIENTO',
+  'VICIOS_Y_LUJOS',
+  'MULTAS_Y_SANCIONES',
+  'SERVICIOS_FINANCIEROS',
+  'MASCOTAS',
+  'DONACIONES_NO_CALIFICADAS',
+  'GASTOS_EXTERIOR',
+  'TECNOLOGIA_PERSONAL',
+  'TRANSPORTE_PERSONAL',
+  'CUIDADO_PERSONAL',
+  'APUESTAS_Y_JUEGOS',
+  'OTROS_NO_DEDUCIBLE',
+] as const
+
+// The expense categories the agent may assign — mirrors the CHECK constraint on
+// invoice_lines.tax_category.
+export const TAX_CATEGORIES = [...DEDUCTIBLE_CATEGORIES, ...NON_DEDUCTIBLE_CATEGORIES] as const
+
+export const TaxCategorySchema = Schema.Literal(...TAX_CATEGORIES)
+
+// A category being deductible is a property of the catalogue, not of the model's
+// opinion: the agent proposes isDeductible, this decides whether it can stand.
+export const isDeductibleCategory = (category: string): boolean =>
+  (DEDUCTIBLE_CATEGORIES as readonly string[]).includes(category)
 
 // An invoice line once the agent has assigned it a category. `confidence` below
 // CONFIDENCE_THRESHOLD routes the line to the conflict report.
 export const ClassifiedInvoiceItemSchema = Schema.Struct({
   ...InvoiceItemSchema.fields,
   taxCategory: TaxCategorySchema,
+  // Whether this specific line can be deducted. Independent of the category:
+  // a NEGOCIO line for a taxpayer with no economic activity, or a SALUD line
+  // without a valid receipt, is a real category with isDeductible = false.
+  isDeductible: Schema.Boolean,
   confidence: Schema.Number.pipe(Schema.between(0, 1)),
   // One-line justification the agent must write BEFORE settling on a category.
   // Forcing the reasoning reduces anchoring on brand names and surfaces the
@@ -142,11 +175,15 @@ export const ConflictReportSchema = Schema.Struct({
 // tax_category over the balanced, already-classified invoice lines.
 export const CategoryExpenseSchema = Schema.Struct({
   category: TaxCategorySchema,
+  // 1 when the category is an SRI rubro. Lets the report show the deductible
+  // rubros and the non-deductible breakdown as two separate blocks.
+  deductibleCategory: Schema.Literal(0, 1),
   lineCount: Schema.Number, // number of invoice lines in the category
   base: Schema.Number, // SUM(subtotal) — taxable base
   vat: Schema.Number, // SUM(vat_amount)
   total: Schema.Number, // base + vat
   deductible: Schema.Number, // base of the lines flagged is_deductible = 1
+  nonDeductible: Schema.Number, // base of the lines flagged is_deductible = 0
 })
 
 export const CategoryExpenseReportSchema = Schema.Array(CategoryExpenseSchema)

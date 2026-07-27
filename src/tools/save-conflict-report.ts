@@ -56,7 +56,7 @@ export class SaveConflictReportTool extends Effect.Service<SaveConflictReportToo
               a.invoiceNumber.localeCompare(b.invoiceNumber),
             )
 
-            const conflictFile = input.conflictLines ? `conflicts-${stamp}.csv` : undefined
+            const conflictFile = input.conflictLines.length ? `conflicts-${stamp}.csv` : undefined
             const reportFile = `summary-${stamp}.json`
 
             const report: ConflictReport = {

@@ -1,6 +1,19 @@
 PRAGMA foreign_keys = ON;
 
 -- ---------------------------------------------------------------------
+-- CATEGORÍAS DE GASTO
+--
+-- Cada línea de detalle lleva SIEMPRE dos datos independientes:
+--   * tax_category  — el rubro concreto del gasto.
+--   * is_deductible — si ese gasto entra o no en la declaración.
+--
+-- Las 7 primeras categorías son los rubros deducibles del SRI; las demás
+-- describen el gasto no deducible con el mismo nivel de detalle, para que el
+-- reporte explique EN QUÉ se va el dinero que no se puede deducir.
+-- El CHECK final impide marcar como deducible una categoría que no lo es.
+-- ---------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------
 -- 1. SUPPLIERS — un registro por RUC (caché del padrón SRI)
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS suppliers (
@@ -10,8 +23,14 @@ CREATE TABLE IF NOT EXISTS suppliers (
     status            TEXT,                 -- 'ACTIVO' | 'SUSPENDIDO' (valores SRI)
     economic_activity TEXT,                 -- actividad económica del padrón
     default_category  TEXT CHECK (default_category IN
+                        -- deducibles (SRI)
                         ('VIVIENDA','SALUD','EDUCACION','ALIMENTACION',
-                         'VESTIMENTA','TURISMO','NEGOCIO','NO_DEDUCIBLE')),
+                         'VESTIMENTA','TURISMO','NEGOCIO',
+                        -- no deducibles (detalle)
+                         'ENTRETENIMIENTO','VICIOS_Y_LUJOS','MULTAS_Y_SANCIONES',
+                         'SERVICIOS_FINANCIEROS','MASCOTAS','DONACIONES_NO_CALIFICADAS',
+                         'GASTOS_EXTERIOR','TECNOLOGIA_PERSONAL','TRANSPORTE_PERSONAL',
+                         'CUIDADO_PERSONAL','APUESTAS_Y_JUEGOS','OTROS_NO_DEDUCIBLE')),
     updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -53,19 +72,32 @@ CREATE TABLE IF NOT EXISTS invoice_lines (
     vat_amount     REAL NOT NULL DEFAULT 0,
     -- Clasificación (la escribe el Paso 3 o el agent loop)
     tax_category   TEXT CHECK (tax_category IN
+                     -- deducibles (SRI)
                      ('VIVIENDA','SALUD','EDUCACION','ALIMENTACION',
-                      'VESTIMENTA','TURISMO','NEGOCIO','NO_DEDUCIBLE')),
-    is_deductible  INTEGER DEFAULT 0 CHECK (is_deductible IN (0,1)),
+                      'VESTIMENTA','TURISMO','NEGOCIO',
+                     -- no deducibles (detalle)
+                      'ENTRETENIMIENTO','VICIOS_Y_LUJOS','MULTAS_Y_SANCIONES',
+                      'SERVICIOS_FINANCIEROS','MASCOTAS','DONACIONES_NO_CALIFICADAS',
+                      'GASTOS_EXTERIOR','TECNOLOGIA_PERSONAL','TRANSPORTE_PERSONAL',
+                      'CUIDADO_PERSONAL','APUESTAS_Y_JUEGOS','OTROS_NO_DEDUCIBLE')),
+    is_deductible  INTEGER NOT NULL DEFAULT 0 CHECK (is_deductible IN (0,1)),
     method         TEXT CHECK (method IN ('REGLA','LLM','HUMANO')),
     confidence     REAL CHECK (confidence BETWEEN 0 AND 1),
     rationale      TEXT,                    -- justificación en 1 frase de la categoría
-    UNIQUE (invoice_id, line_number)
+    UNIQUE (invoice_id, line_number),
+    -- Una categoría no deducible nunca puede quedar marcada como deducible.
+    CHECK (is_deductible = 0 OR tax_category IN
+             ('VIVIENDA','SALUD','EDUCACION','ALIMENTACION',
+              'VESTIMENTA','TURISMO','NEGOCIO'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_lines_invoice ON invoice_lines(invoice_id);
 -- Cola del agente = líneas sin clasificar
 CREATE INDEX IF NOT EXISTS idx_lines_pending
     ON invoice_lines(id) WHERE tax_category IS NULL;
+-- Reporte por rubro: agrupa por categoría separando deducible de no deducible.
+CREATE INDEX IF NOT EXISTS idx_lines_category
+    ON invoice_lines(tax_category, is_deductible);
 
 -- =====================================================================
 -- CONSULTAS DE REPORTE
@@ -82,6 +114,12 @@ CREATE INDEX IF NOT EXISTS idx_lines_pending
 --   FROM invoice_lines l JOIN invoices i ON i.id = l.invoice_id
 --   WHERE l.is_deductible = 1 AND i.is_balanced = 1
 --   GROUP BY month, l.tax_category;
+
+-- En qué se va el gasto NO deducible (detalle por rubro):
+--   SELECT l.tax_category, COUNT(*) AS lines, SUM(l.subtotal + l.vat_amount) AS total
+--   FROM invoice_lines l JOIN invoices i ON i.id = l.invoice_id
+--   WHERE l.is_deductible = 0 AND i.is_balanced = 1
+--   GROUP BY l.tax_category ORDER BY total DESC;
 
 -- Gasto por establecimiento:
 --   SELECT s.trade_name, i.branch_code,
