@@ -13,9 +13,11 @@ export class SriService extends Effect.Service<SriService>()('app/SriService', {
       httpClient.get(url).pipe(
         Effect.tap(() => Console.log(`Fetching SRI data from ${url}`)),
         Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
-        Effect.tap((items) => Console.log(`SRI response: ${JSON.stringify(items)}`)),
         Effect.map((items) => items[0]),
         Effect.mapError((error) => new FetchError({ message: String(error) })),
+        Effect.tapError((error) =>
+          Console.error(`Error fetching SRI data from ${url}: ${error.message}`),
+        ),
       )
 
     return {
