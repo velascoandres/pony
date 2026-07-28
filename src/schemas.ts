@@ -200,3 +200,12 @@ export const ExpenseReportResultSchema = Schema.Struct({
 export const ParseInvoiceInput = Schema.Struct({ invoiceFilePath: Schema.String })
 export const GetFiscalInfoInput = Schema.Struct({ ruc: Schema.String })
 export const SaveInvoiceInfoInput = Schema.Struct({ invoiceInfo: ClassifiedInvoiceSchema })
+
+// Resolution file
+export const ResolveFileInput = Schema.Struct({
+  invoiceNumber: Schema.String,
+  category: TaxCategorySchema,
+  isDeductible: Schema.Boolean,
+})
+
+export const ResolveFileInputSchema = Schema.Array(ResolveFileInput)
