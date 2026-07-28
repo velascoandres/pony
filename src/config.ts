@@ -9,6 +9,7 @@ export class ConfigService extends Effect.Service<ConfigService>()('app/config',
       dbPath: Config.string('DB_PATH'),
       maxToolCalls: Config.integer('MAX_TOOL_CALLS'),
       confidenceThreshold: Config.number('CONFIDENCE_THRESHOLD'),
+      sriBaseUrl: Config.string('SRI_BASE_URL'),
     })
 
     return { config }

@@ -1,13 +1,14 @@
 import { HttpClient, HttpClientResponse } from '@effect/platform'
 import { Console, Effect, type Schema } from 'effect'
+import { ConfigService } from '../config.js'
 import { FetchError } from '../errors.js'
 import { SriContributorRawResponse, SriWEstablishmentRawResponse } from '../schemas.js'
-
-const SRI_BASE_URL = 'https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet/rest'
 
 export class SriService extends Effect.Service<SriService>()('app/SriService', {
   effect: Effect.gen(function* () {
     const httpClient = yield* HttpClient.HttpClient
+    const configService = yield* ConfigService
+    const SRI_BASE_URL = configService.config.sriBaseUrl
 
     const getJson = <A, I>(url: string, schema: Schema.Schema<ReadonlyArray<A>, I>) =>
       httpClient.get(url).pipe(
