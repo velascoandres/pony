@@ -4,11 +4,18 @@ import { ConfigService } from '../config.js'
 import { DbClient } from '../db/client.js'
 import { ResolveFileInput } from '../schemas.js'
 import { InvoiceService } from '../services/invoice.service.js'
+import { SaveExpenseReportTool } from '../tools/save-expense-report.js'
 import type { LineResolution, ResolvedLine } from '../types.js'
 import { findResolutionFile } from '../utils/find-resolution-file.js'
 import { parseJsonFile } from '../utils/parse-json.js'
 
-const MainLive = Layer.mergeAll(InvoiceService.Default, NodeFileSystem.layer, NodePath.layer).pipe(
+const MainLive = Layer.mergeAll(
+  InvoiceService.Default,
+  SaveExpenseReportTool.Default,
+  NodeFileSystem.layer,
+  NodePath.layer,
+).pipe(
+  Layer.provide(InvoiceService.Default),
   Layer.provide(DbClient.Default),
   Layer.provide(ConfigService.Default),
   Layer.provide(NodeFileSystem.layer),
@@ -24,13 +31,15 @@ const EMPTY_OUTCOME: ResolveOutcome = { resolved: [], failed: [] }
 
 /**
  * Applies a resolution file to the database: the human verdict for every line
- * that came out of the conflict report.
+ * that came out of the conflict report, then re-renders the HTML expense report
+ * so what is on disk matches what is stored.
  *
  *   pnpm resolve                                        # newest file in resolutions/
  *   pnpm resolve resolutions/resolution-<timestamp>.json
  */
 const program = Effect.gen(function* () {
   const invoiceService = yield* InvoiceService
+  const expenseReport = yield* SaveExpenseReportTool
 
   const [, , requestedPath] = process.argv
   const resolutionFile = yield* findResolutionFile(requestedPath)
@@ -64,6 +73,16 @@ const program = Effect.gen(function* () {
     yield* Console.error(
       `Unapplied invoice line ids: ${outcome.failed.map((entry) => entry.invoiceLineId).join(', ')}`,
     )
+  }
+
+  // A resolution moves money between rubros, so the HTML in reports/ no longer
+  // matches the database. Re-render it here — otherwise the newest report on disk
+  // is the pre-resolution one and whoever opens it reads stale totals. Nothing
+  // changed means nothing to re-render.
+  if (outcome.resolved.length > 0) {
+    yield* expenseReport.execute()
+  } else {
+    yield* Console.log('No line changed, so the existing expense report still holds.')
   }
 
   return outcome

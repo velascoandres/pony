@@ -177,7 +177,8 @@ On each run the agent writes three files to `reports/`, timestamped:
   (base, IVA, total, deductible base and share of the total per rubro), split into the
   deductible rubros and the breakdown of the non-deductible spend, rendered from the
   `templates/expense-report.ejs` template. Always generated at the end of the run, even when
-  there are no conflicts (it renders an empty-state message if nothing was classified yet).
+  there are no conflicts (it renders an empty-state message if nothing was classified yet),
+  and again after every applied resolution — see below.
 
 ## Resolving conflicts
 
@@ -223,8 +224,13 @@ For every entry applied, the line is rewritten as a human decision:
 
 An entry whose id is not in the database is reported and skipped — the rest of the file is
 still applied, and the command exits non-zero so a partial run is not mistaken for a clean
-one. A malformed file (unknown category, non-numeric id) is rejected as a whole before
-anything is written.
+one. A malformed file (unknown category, id that is not a UUID) is rejected as a whole
+before anything is written.
+
+Because a resolution moves money between rubros, the command finishes by rendering a fresh
+`reports/report-<timestamp>.html` from the updated database — so the newest report on disk is
+never the pre-resolution one. If no line changed, the existing report still holds and none
+is written.
 
 ## Example output
 
