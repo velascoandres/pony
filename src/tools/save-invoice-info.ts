@@ -1,6 +1,6 @@
 import { Console, Effect } from 'effect'
 import { InvoiceService } from '../services/invoice.service.js'
-import type { ClassifiedInvoice } from '../types.js'
+import type { IdentifiedInvoice } from '../types.js'
 
 export class SaveInvoiceInfoTool extends Effect.Service<SaveInvoiceInfoTool>()(
   'app/SaveInvoiceInfoTool',
@@ -9,7 +9,7 @@ export class SaveInvoiceInfoTool extends Effect.Service<SaveInvoiceInfoTool>()(
       const invoiceService = yield* InvoiceService
 
       return {
-        execute: (invoice: ClassifiedInvoice) =>
+        execute: (invoice: IdentifiedInvoice) =>
           Effect.gen(function* () {
             // Save invoice to database
             const result = yield* invoiceService.createInvoice(invoice)
@@ -23,6 +23,8 @@ export class SaveInvoiceInfoTool extends Effect.Service<SaveInvoiceInfoTool>()(
             yield* Console.table(items).pipe(
               Console.withGroup({ label: `Invoice Items (${items.length})` }),
             )
+
+            return result
           }),
       }
     }),

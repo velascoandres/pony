@@ -4,7 +4,7 @@ import { ConfigService } from '../config.js'
 import { LLMService } from '../llm/client.js'
 import { SaveConflictReportTool } from '../tools/save-conflict-report.js'
 import { SaveExpenseReportTool } from '../tools/save-expense-report.js'
-import type { ClassifiedInvoice, ConflictLine, InvoiceOutcome } from '../types.js'
+import type { ConflictLine, IdentifiedInvoice, InvoiceOutcome } from '../types.js'
 import { listInvoices } from '../utils/list-invoices.js'
 import { AGENT_SYSTEM_PROMPT } from './system-prompt.js'
 import { decodeToolCall } from './tool-decoder.js'
@@ -25,11 +25,13 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
     const MAX_TOOL_CALLS = config.maxToolCalls
 
     // Split a classified invoice into the lines we trust and the ones that need a
-    // human to look at them.
-    const toOutcome = (invoice: ClassifiedInvoice): InvoiceOutcome => {
+    // human to look at them. `lines` comes from the save and is positional: the
+    // rows were inserted in item order, so item i is line i.
+    const toOutcome = (invoice: IdentifiedInvoice): InvoiceOutcome => {
       const conflictLines = invoice.items
         .filter((item) => item.confidence < CONFIDENCE_THRESHOLD)
         .map((item) => ({
+          invoiceLineId: item.invoiceLineId,
           invoiceNumber: invoice.invoiceNumber,
           description: item.description,
           quantity: item.quantity,
@@ -105,6 +107,7 @@ export class InvoiceAgent extends Effect.Service<InvoiceAgent>()('app/InvoiceAge
                 }
 
                 const { call, result } = attempt.right
+
                 if (call.toolName === 'save_invoice_info_tool') {
                   outcome = toOutcome(call.input)
                 }

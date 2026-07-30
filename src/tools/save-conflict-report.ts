@@ -4,7 +4,10 @@ import { ReportError } from '../errors.js'
 import { ConflictReportSchema } from '../schemas.js'
 import type { ConflictLine, ConflictReport, ConflictReportInput } from '../types.js'
 
+// invoiceLineId leads the row on purpose: it is the value the reviewer copies
+// into a resolution file to point at this exact line (see `pnpm resolve`).
 const CSV_HEADER = [
+  'invoiceLineId',
   'invoiceNumber',
   'description',
   'quantity',
@@ -22,6 +25,7 @@ const csvCell = (value: string | number | undefined): string => {
 const toCsv = (lines: readonly ConflictLine[]): string => {
   const rows = lines.map((line) =>
     [
+      line.invoiceLineId,
       line.invoiceNumber,
       line.description,
       line.quantity,

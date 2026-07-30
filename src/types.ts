@@ -9,7 +9,10 @@ import type {
   ConflictReportSchema,
   ContributorSchema,
   ExpenseReportResultSchema,
+  IdentifiedInvoiceItemSchema,
+  IdentifiedInvoiceSchema,
   InvoiceSchema,
+  ResolveFileInput,
   TaxCategorySchema,
 } from './schemas.js'
 import type { GetFiscalInfoTool } from './tools/get-fiscal-info.js'
@@ -54,6 +57,8 @@ export type Invoice = Schema.Schema.Type<typeof InvoiceSchema>
 export type TaxCategory = Schema.Schema.Type<typeof TaxCategorySchema>
 export type ClassifiedInvoiceItem = Schema.Schema.Type<typeof ClassifiedInvoiceItemSchema>
 export type ClassifiedInvoice = Schema.Schema.Type<typeof ClassifiedInvoiceSchema>
+export type IdentifiedInvoiceItem = Schema.Schema.Type<typeof IdentifiedInvoiceItemSchema>
+export type IdentifiedInvoice = Schema.Schema.Type<typeof IdentifiedInvoiceSchema>
 
 export interface ToolDefinition {
   name: string
@@ -68,4 +73,25 @@ export interface ToolDefinition {
 export interface InvoiceOutcome {
   readonly successLines: number
   readonly conflictLines: readonly ConflictLine[]
+}
+
+// One entry of a resolution file: the human's verdict for a single conflicting
+// line.
+export type LineResolution = Schema.Schema.Type<typeof ResolveFileInput>
+
+// What `save_invoice_info_tool` hands back once the invoice is persisted.
+export interface SaveInvoiceResult {
+  readonly invoiceId: number
+  readonly isBalanced: boolean
+}
+
+// A line after a manual resolution has been applied to it. Carries the previous
+// category so the command can show what the user actually changed.
+export interface ResolvedLine {
+  readonly invoiceLineId: string
+  readonly invoiceNumber: string
+  readonly description: string
+  readonly previousCategory: TaxCategory | null
+  readonly category: TaxCategory
+  readonly isDeductible: boolean
 }

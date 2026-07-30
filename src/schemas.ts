@@ -146,8 +146,26 @@ export const ClassifiedInvoiceSchema = Schema.Struct({
   items: Schema.Array(ClassifiedInvoiceItemSchema),
 })
 
+// A classified line once it has been given its database identity. The id is
+// minted by the app — not by SQLite's rowid and not by the model — as the invoice
+// crosses from model output into the domain, so the INSERT and the conflict
+// report can name the same row without asking the database for it.
+export const IdentifiedInvoiceItemSchema = Schema.Struct({
+  ...ClassifiedInvoiceItemSchema.fields,
+  invoiceLineId: Schema.UUID,
+})
+
+export const IdentifiedInvoiceSchema = Schema.Struct({
+  ...ClassifiedInvoiceSchema.fields,
+  items: Schema.Array(IdentifiedInvoiceItemSchema),
+})
+
 // A single invoice line that could not be classified into a category.
 export const ConflictLineSchema = Schema.Struct({
+  // id of the invoice_lines row. The line already carries it before it is saved,
+  // so it is always available here; it is what the human writes back in the
+  // resolution file, hence the CSV's first column.
+  invoiceLineId: Schema.UUID,
   invoiceNumber: Schema.String, // "estab-ptoEmi-secuencial": used to order the CSV
   description: Schema.String,
   quantity: Schema.Number,
@@ -202,8 +220,11 @@ export const GetFiscalInfoInput = Schema.Struct({ ruc: Schema.String })
 export const SaveInvoiceInfoInput = Schema.Struct({ invoiceInfo: ClassifiedInvoiceSchema })
 
 // Resolution file
+// The id is copied by hand out of the conflict CSV, so it is validated as a UUID
+// here: a truncated or mistyped paste fails loudly at decode time instead of
+// quietly matching no row.
 export const ResolveFileInput = Schema.Struct({
-  invoiceNumber: Schema.String,
+  invoiceLineId: Schema.UUID,
   category: TaxCategorySchema,
   isDeductible: Schema.Boolean,
 })

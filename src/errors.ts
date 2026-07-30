@@ -36,3 +36,7 @@ export class DatabaseError extends Data.TaggedError('DatabaseError')<{ message: 
 export class UnknownToolError extends Data.TaggedError('UnknownToolError')<{ message: string }> {}
 
 export class ReportError extends Data.TaggedError('ReportError')<{ message: string }> {}
+
+// Raised when a resolution file cannot be located or points at a line that is
+// not in the database.
+export class ResolutionError extends Data.TaggedError('ResolutionError')<{ message: string }> {}

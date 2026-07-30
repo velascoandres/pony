@@ -61,7 +61,8 @@ CREATE INDEX IF NOT EXISTS idx_invoices_supplier ON invoices(supplier_ruc);
 -- 3. INVOICE_LINES — detalle + clasificación en la misma fila
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS invoice_lines (
-    id             INTEGER PRIMARY KEY,
+    -- UUID v4 generado por la app (src/utils/generate-id.ts)
+    id             TEXT PRIMARY KEY CHECK (length(id) = 36),
     invoice_id     INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     line_number    INTEGER NOT NULL,
     description    TEXT NOT NULL,

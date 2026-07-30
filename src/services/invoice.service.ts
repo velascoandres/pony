@@ -1,22 +1,46 @@
 import { Console, Effect, Schema } from 'effect'
 import { DbClient } from '../db/client.js'
-import { DatabaseError } from '../errors.js'
+import { DatabaseError, ResolutionError } from '../errors.js'
 import {
   CategoryExpenseReportSchema,
   DEDUCTIBLE_CATEGORIES,
   InvoiceSchema,
   isDeductibleCategory,
 } from '../schemas.js'
-import type { ClassifiedInvoice, ClassifiedInvoiceItem, TaxCategory } from '../types.js'
+import type {
+  IdentifiedInvoice,
+  LineResolution,
+  ResolvedLine,
+  SaveInvoiceResult,
+  TaxCategory,
+} from '../types.js'
 
 // Header and total must reconcile within one cent to be considered balanced.
 const BALANCE_TOLERANCE = 0.01
 
 // The agent decides deductibility per line, but the catalogue has the last word:
 // a category that is not an SRI rubro can never be stored as deductible (the
-// same rule the CHECK constraint on invoice_lines enforces).
-const toDeductibleFlag = (item: ClassifiedInvoiceItem) =>
-  item.isDeductible && isDeductibleCategory(item.taxCategory) ? 1 : 0
+// same rule the CHECK constraint on invoice_lines enforces). It applies to a
+// human verdict too — the DB would reject it either way.
+const toDeductibleFlag = (line: {
+  readonly taxCategory: TaxCategory
+  readonly isDeductible: boolean
+}) => (line.isDeductible && isDeductibleCategory(line.taxCategory) ? 1 : 0)
+
+// A line the user classified by hand is ground truth: full confidence, method
+// HUMANO, and a rationale prefixed with this marker so the stored reasoning says
+// where the decision came from.
+const MANUAL_TAG = '[MANUAL-TAGGED]'
+const MANUAL_CONFIDENCE = 1
+
+// Keep the agent's original wording behind the marker — it is the reasoning the
+// human was reviewing. Prefixing is idempotent so re-applying the same
+// resolution file does not stack markers.
+const toManualRationale = (rationale: string | null): string => {
+  const previous = rationale?.trim() ?? ''
+  if (previous.startsWith(MANUAL_TAG)) return previous
+  return previous.length > 0 ? `${MANUAL_TAG} ${previous}` : MANUAL_TAG
+}
 
 // Inlined into the report query so the SQL splits rubros exactly like the TS
 // catalogue does.
@@ -27,7 +51,7 @@ export class InvoiceService extends Effect.Service<InvoiceService>()('app/Invoic
     const dbClient = yield* DbClient
 
     return {
-      createInvoice: (invoiceData: ClassifiedInvoice) =>
+      createInvoice: (invoiceData: IdentifiedInvoice) =>
         Effect.gen(function* () {
           yield* Console.log(`Creating invoice ${invoiceData.invoiceNumber} (${invoiceData.ruc})`)
 
@@ -73,19 +97,22 @@ export class InvoiceService extends Effect.Service<InvoiceService>()('app/Invoic
 
           // 3. Insert each detail line together with the category the agent
           //    assigned, so the line leaves the pending queue (idx_lines_pending).
+          //    The line already knows its id — it was minted when the invoice
+          //    entered the domain — so nothing here depends on lastInsertRowid.
           yield* Effect.forEach(
             invoiceData.items,
             (item, index) =>
               dbClient.executeSql(
                 `INSERT INTO invoice_lines
-                   (invoice_id, line_number, description, quantity, unit_price,
+                   (id, invoice_id, line_number, description, quantity, unit_price,
                     subtotal, vat_rate, vat_amount,
                     tax_category, is_deductible, method, confidence, rationale)
                  VALUES
-                   (@invoiceId, @lineNumber, @description, @quantity, @unitPrice,
+                   (@invoiceLineId, @invoiceId, @lineNumber, @description, @quantity, @unitPrice,
                     @subtotal, @vatRate, @vatAmount,
                     @taxCategory, @isDeductible, 'LLM', @confidence, @rationale)`,
                 {
+                  invoiceLineId: item.invoiceLineId,
                   invoiceId,
                   lineNumber: index + 1,
                   description: item.description,
@@ -107,8 +134,78 @@ export class InvoiceService extends Effect.Service<InvoiceService>()('app/Invoic
             `Invoice created with id ${invoiceId} (${invoiceData.items.length} lines)`,
           )
 
-          return { success: true, invoiceId, isBalanced: isBalanced === 1 }
+          const saved: SaveInvoiceResult = { invoiceId, isBalanced: isBalanced === 1 }
+          return saved
         }).pipe(Effect.tapError((error) => Console.error(`Failed to create invoice: ${error}`))),
+      // Apply one human verdict to one line. The user has already looked at the
+      // line, so the stored classification becomes fully confident and HUMANO —
+      // the agent's confidence score no longer means anything for it.
+      resolveInvoiceLine: (resolution: LineResolution) =>
+        Effect.gen(function* () {
+          const [line] = yield* dbClient.query<{
+            description: string
+            taxCategory: TaxCategory | null
+            rationale: string | null
+            invoiceNumber: string
+          }>(
+            `SELECT l.description      AS description,
+                    l.tax_category     AS taxCategory,
+                    l.rationale        AS rationale,
+                    i.invoice_number   AS invoiceNumber
+             FROM invoice_lines l
+             JOIN invoices i ON i.id = l.invoice_id
+             WHERE l.id = @invoiceLineId`,
+            { invoiceLineId: resolution.invoiceLineId },
+          )
+
+          // A typo in the resolution file must not pass silently as a no-op
+          // UPDATE: nothing would change and the user would never know.
+          if (line === undefined) {
+            return yield* new ResolutionError({
+              message: `Invoice line ${resolution.invoiceLineId} does not exist`,
+            })
+          }
+
+          const isDeductible = toDeductibleFlag({
+            taxCategory: resolution.category,
+            isDeductible: resolution.isDeductible,
+          })
+
+          yield* dbClient.executeSql(
+            `UPDATE invoice_lines
+             SET tax_category  = @taxCategory,
+                 is_deductible = @isDeductible,
+                 method        = 'HUMANO',
+                 confidence    = @confidence,
+                 rationale     = @rationale
+             WHERE id = @invoiceLineId`,
+            {
+              taxCategory: resolution.category,
+              isDeductible,
+              confidence: MANUAL_CONFIDENCE,
+              rationale: toManualRationale(line.rationale),
+              invoiceLineId: resolution.invoiceLineId,
+            },
+          )
+
+          yield* Console.log(
+            `Line ${resolution.invoiceLineId} (${line.invoiceNumber}): ${line.taxCategory ?? 'SIN CATEGORIA'} -> ${resolution.category}`,
+          )
+
+          const resolved: ResolvedLine = {
+            invoiceLineId: resolution.invoiceLineId,
+            invoiceNumber: line.invoiceNumber,
+            description: line.description,
+            previousCategory: line.taxCategory,
+            category: resolution.category,
+            isDeductible: isDeductible === 1,
+          }
+          return resolved
+        }).pipe(
+          Effect.tapError((error) =>
+            Console.error(`Failed to resolve line ${resolution.invoiceLineId}: ${error.message}`),
+          ),
+        ),
       getInvoicesBySupplier: (ruc: string) =>
         Effect.gen(function* () {
           yield* Console.log(`Fetching invoices for supplier ${ruc}`)
